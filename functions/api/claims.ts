@@ -29,22 +29,35 @@ function extractText(prop: any): any {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
-    const res = await fetch(`${NOTION_API}/databases/${context.env.NOTION_DATABASE_ID}/query`, {
-      method: 'POST',
-      headers: notionHeaders(context.env.NOTION_API_KEY),
-      body: JSON.stringify({
-        sorts: [{ property: 'Date Added', direction: 'descending' }],
-      }),
-    })
+    let allResults: any[] = []
+    let hasMore = true
+    let startCursor: string | undefined = undefined
 
-    if (!res.ok) {
-      const err = await res.json() as { message?: string }
-      return Response.json({ error: err.message || `Notion API ${res.status}` }, { status: res.status })
+    while (hasMore) {
+      const body: any = {
+        sorts: [{ property: 'Date Added', direction: 'descending' }],
+        page_size: 100,
+      }
+      if (startCursor) body.start_cursor = startCursor
+
+      const res = await fetch(`${NOTION_API}/databases/${context.env.NOTION_DATABASE_ID}/query`, {
+        method: 'POST',
+        headers: notionHeaders(context.env.NOTION_API_KEY),
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const err = await res.json() as { message?: string }
+        return Response.json({ error: err.message || `Notion API ${res.status}` }, { status: res.status })
+      }
+
+      const data = await res.json() as { results: any[]; has_more: boolean; next_cursor: string | null }
+      allResults = allResults.concat(data.results)
+      hasMore = data.has_more
+      startCursor = data.next_cursor || undefined
     }
 
-    const data = await res.json() as { results: any[] }
-
-    const claims = data.results.map((page: any) => {
+    const claims = allResults.map((page: any) => {
       const p = page.properties
       return {
         id: page.id,

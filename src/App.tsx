@@ -2,10 +2,11 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useClaims } from './hooks/useNotionData'
 import { useAuth } from './hooks/useAuth'
 import type { User } from './types/claim'
-import Sidebar from './components/Sidebar'
+import AppShell from './components/AppShell'
 import LoginPage from './components/LoginPage'
 import DashboardPage from './pages/DashboardPage'
-import ClaimsPage from './pages/ClaimsPage'
+import ProjectsPage from './pages/ProjectsPage'
+import ProjectDetailPage from './pages/ProjectDetailPage'
 import UsersPage from './pages/UsersPage'
 
 function App() {
@@ -26,25 +27,23 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
   const { claims, loading, error } = useClaims(token)
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar user={user} onLogout={onLogout} />
-      <main className="flex-1 overflow-y-auto p-8">
-        {error && (
-          <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-emergency">
-            <strong>Error:</strong> {error}
-          </div>
+    <AppShell user={user} onLogout={onLogout}>
+      {error && (
+        <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-emergency">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
+      <Routes>
+        <Route path="/" element={<DashboardPage claims={claims} loading={loading} />} />
+        <Route path="/projects" element={<ProjectsPage claims={claims} loading={loading} />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage claims={claims} token={token} />} />
+        <Route path="/calendar" element={<PlaceholderPage title="Calendar" />} />
+        <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
+        {user.role === 'admin' && (
+          <Route path="/users" element={<UsersPage token={token} />} />
         )}
-        <Routes>
-          <Route path="/" element={<DashboardPage claims={claims} loading={loading} />} />
-          <Route path="/claims" element={<ClaimsPage claims={claims} loading={loading} />} />
-          <Route path="/clients" element={<PlaceholderPage title="Clients" />} />
-          <Route path="/contracts" element={<PlaceholderPage title="Contracts" />} />
-          {user.role === 'admin' && (
-            <Route path="/users" element={<UsersPage token={token} />} />
-          )}
-        </Routes>
-      </main>
-    </div>
+      </Routes>
+    </AppShell>
   )
 }
 

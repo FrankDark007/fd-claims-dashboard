@@ -12,6 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
+    "@heroicons/react": "^2.2.0",
     "@notionhq/client": "^5.11.1",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",

@@ -6,5 +6,9 @@ pages_build_output_dir = "dist"
 binding = "FD_CLAIMS_USERS"
 id = "b2ed4696a8184c43a3e6c5f9d6b20af9"
 
+[[kv_namespaces]]
+binding = "FD_PROJECTS_DATA"
+id = "18281eb24d2a4be2bdb52ac0ef39fa23"
+
 [vars]
 NOTION_DATABASE_ID = "3a496fa362994550910a04937d747166"
