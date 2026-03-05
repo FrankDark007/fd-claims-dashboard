@@ -1,8 +1,17 @@
-import { Client } from '@notionhq/client'
-
 interface Env {
   NOTION_API_KEY: string
   NOTION_DATABASE_ID: string
+}
+
+const NOTION_API = 'https://api.notion.com/v1'
+const NOTION_VERSION = '2022-06-28'
+
+function notionHeaders(apiKey: string) {
+  return {
+    'Authorization': `Bearer ${apiKey}`,
+    'Notion-Version': NOTION_VERSION,
+    'Content-Type': 'application/json',
+  }
 }
 
 function extractText(prop: any): any {
@@ -20,14 +29,22 @@ function extractText(prop: any): any {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
-    const notion = new Client({ auth: context.env.NOTION_API_KEY })
-
-    const response = await notion.databases.query({
-      database_id: context.env.NOTION_DATABASE_ID,
-      sorts: [{ property: 'Date Added', direction: 'descending' }],
+    const res = await fetch(`${NOTION_API}/databases/${context.env.NOTION_DATABASE_ID}/query`, {
+      method: 'POST',
+      headers: notionHeaders(context.env.NOTION_API_KEY),
+      body: JSON.stringify({
+        sorts: [{ property: 'Date Added', direction: 'descending' }],
+      }),
     })
 
-    const claims = response.results.map((page: any) => {
+    if (!res.ok) {
+      const err = await res.json() as { message?: string }
+      return Response.json({ error: err.message || `Notion API ${res.status}` }, { status: res.status })
+    }
+
+    const data = await res.json() as { results: any[] }
+
+    const claims = data.results.map((page: any) => {
       const p = page.properties
       return {
         id: page.id,
@@ -60,7 +77,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 export const onRequestPatch: PagesFunction<Env> = async (context) => {
   try {
-    const notion = new Client({ auth: context.env.NOTION_API_KEY })
     const url = new URL(context.request.url)
     const segments = url.pathname.split('/')
     const id = segments[segments.length - 1]
@@ -82,7 +98,17 @@ export const onRequestPatch: PagesFunction<Env> = async (context) => {
     if (updates.amount !== undefined) properties['Amount'] = { number: updates.amount }
     if (updates.notes !== undefined) properties['Notes'] = { rich_text: [{ text: { content: updates.notes } }] }
 
-    await notion.pages.update({ page_id: id, properties })
+    const res = await fetch(`${NOTION_API}/pages/${id}`, {
+      method: 'PATCH',
+      headers: notionHeaders(context.env.NOTION_API_KEY),
+      body: JSON.stringify({ properties }),
+    })
+
+    if (!res.ok) {
+      const err = await res.json() as { message?: string }
+      return Response.json({ error: err.message }, { status: res.status })
+    }
+
     return Response.json({ success: true })
   } catch (error: any) {
     return Response.json({ error: error.message }, { status: 500 })
