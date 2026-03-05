@@ -1,0 +1,6 @@
+name = "fd-claims-dashboard"
+compatibility_date = "2024-12-01"
+pages_build_output_dir = "dist"
+
+[vars]
+NOTION_DATABASE_ID = "3a496fa362994550910a04937d747166"

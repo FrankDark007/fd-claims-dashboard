@@ -1,0 +1,38 @@
+export type ContractStatus = 'Missing' | 'Requested' | 'Signed'
+export type COCStatus = 'Missing' | 'Requested' | 'Signed'
+export type FinalInvoiceStatus = 'Not Started' | 'Drafting' | 'Review' | 'Complete'
+export type MatterportStatus = 'N/A' | 'Missing' | 'Has Scan'
+export type RewriteStatus = 'Not Started' | 'In Progress' | 'Review' | 'Done'
+export type InvoiceStatus = 'Draft' | 'Sent' | 'Paid' | 'Overdue'
+export type ProjectType = 'Water Mitigation' | 'Pack-out' | 'Mold Remediation'
+
+export interface Claim {
+  id: string
+  notionUrl: string
+  clientName: string
+  invoiceId: number | null
+  project: string
+  projectType: ProjectType | null
+  amount: number | null
+  status: InvoiceStatus | null
+  contract: ContractStatus | null
+  coc: COCStatus | null
+  finalInvoice: FinalInvoiceStatus | null
+  companyCam: string
+  matterport: MatterportStatus | null
+  rewriteStatus: RewriteStatus | null
+  xactimateNumber: string
+  dateAdded: string | null
+  driveFolder: string
+  notes: string
+  done: boolean
+}
+
+export interface DashboardStats {
+  totalClaims: number
+  totalRevenue: number
+  overdueCount: number
+  activeCount: number
+  missingContracts: number
+  missingCOCs: number
+}

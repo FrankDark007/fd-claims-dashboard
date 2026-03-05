@@ -1,0 +1,37 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1a73e8;
+  --color-primary-hover: #1557b0;
+  --color-primary-light: #e8f0fe;
+  --color-foreground: #202124;
+  --color-secondary: #5f6368;
+  --color-muted: #9aa0a6;
+  --color-faint: #dadce0;
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8f9fa;
+  --color-emergency: #d93025;
+  --color-success: #188038;
+  --color-warning: #f9ab00;
+
+  --color-sidebar: #1e1e2e;
+  --color-sidebar-hover: #2a2a3e;
+  --color-sidebar-active: #35355a;
+  --color-sidebar-text: #a6adc8;
+  --color-sidebar-text-active: #ffffff;
+
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 6px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.06);
+  --shadow-xl: 0 10px 15px rgba(0,0,0,0.1), 0 4px 6px rgba(0,0,0,0.05);
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-surface-alt);
+  color: var(--color-foreground);
+  margin: 0;
+}
