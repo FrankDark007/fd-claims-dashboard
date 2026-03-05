@@ -10,7 +10,7 @@ function App() {
   const auth = useAuth()
 
   if (!auth.isAuthenticated) {
-    return <LoginPage onLogin={auth.login} loading={auth.loading} error={auth.error} />
+    return <LoginPage onLogin={auth.login} onGoogleLogin={auth.googleLogin} loading={auth.loading} error={auth.error} />
   }
 
   return (

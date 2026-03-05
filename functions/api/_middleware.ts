@@ -15,7 +15,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
 
   // Skip auth for public endpoints
-  if (url.pathname === '/api/auth' || url.pathname === '/api/webhook') {
+  if (url.pathname === '/api/auth' || url.pathname === '/api/auth/google' || url.pathname === '/api/webhook') {
     return context.next()
   }
 

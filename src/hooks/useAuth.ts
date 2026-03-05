@@ -34,6 +34,31 @@ export function useAuth() {
     }
   }, [])
 
+  const googleLogin = useCallback(async (credential: string) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Google sign-in failed')
+        return false
+      }
+      localStorage.setItem(TOKEN_KEY, data.token)
+      setToken(data.token)
+      return true
+    } catch {
+      setError('Connection error')
+      return false
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY)
     setToken(null)
@@ -48,16 +73,8 @@ export function useAuth() {
       if (res.status === 401) {
         logout()
       }
-    }).catch(() => {
-      // Network error — don't logout, might be offline
-    })
+    }).catch(() => {})
   }, [token, logout])
 
-  return { isAuthenticated, token, login, logout, loading, error }
-}
-
-export function getAuthHeaders(): Record<string, string> {
-  const token = localStorage.getItem(TOKEN_KEY)
-  if (!token) return {}
-  return { Authorization: `Bearer ${token}` }
+  return { isAuthenticated, token, login, googleLogin, logout, loading, error }
 }

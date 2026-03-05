@@ -1,12 +1,26 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface LoginPageProps {
   onLogin: (password: string) => Promise<boolean>
+  onGoogleLogin: (credential: string) => Promise<boolean>
   loading: boolean
   error: string | null
 }
 
-export default function LoginPage({ onLogin, loading, error }: LoginPageProps) {
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: Record<string, unknown>) => void
+          renderButton: (el: HTMLElement, config: Record<string, unknown>) => void
+        }
+      }
+    }
+  }
+}
+
+export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: LoginPageProps) {
   const [password, setPassword] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -14,68 +28,105 @@ export default function LoginPage({ onLogin, loading, error }: LoginPageProps) {
     await onLogin(password)
   }
 
+  const handleGoogleCallback = useCallback(
+    (response: { credential: string }) => {
+      onGoogleLogin(response.credential)
+    },
+    [onGoogleLogin]
+  )
+
+  useEffect(() => {
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.defer = true
+    script.onload = () => {
+      window.google?.accounts.id.initialize({
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '904013675236-cmunivo30gunjeedudcn9utss0faa1ua.apps.googleusercontent.com',
+        callback: handleGoogleCallback,
+      })
+      const btnEl = document.getElementById('google-signin-btn')
+      if (btnEl) {
+        window.google?.accounts.id.renderButton(btnEl, {
+          theme: 'filled_black',
+          size: 'large',
+          width: 400,
+          text: 'signin_with',
+        })
+      }
+    }
+    document.head.appendChild(script)
+    return () => { document.head.removeChild(script) }
+  }, [handleGoogleCallback])
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-sidebar">
-      <div className="w-full max-w-sm">
-        {/* Logo */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary shadow-lg">
-            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-white">Flood Doctor</h1>
-          <p className="mt-1 text-sm text-sidebar-text">Claims Dashboard</p>
+    <div className="flex min-h-full flex-col justify-center py-12 sm:px-6 lg:px-8 bg-sidebar">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-lg">
+          <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+          </svg>
         </div>
+        <h2 className="mt-6 text-center text-2xl/9 font-bold tracking-tight text-white">
+          Sign in to Flood Doctor
+        </h2>
+        <p className="mt-2 text-center text-sm text-sidebar-text">Claims Dashboard</p>
+      </div>
 
-        {/* Login Card */}
-        <div className="rounded-2xl bg-surface p-8 shadow-xl">
-          <h2 className="mb-6 text-lg font-semibold text-foreground">Sign in</h2>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
+        <div className="bg-gray-800/50 px-6 py-12 outline -outline-offset-1 outline-white/10 sm:rounded-lg sm:px-12">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary mb-1.5">
+              <label htmlFor="password" className="block text-sm/6 font-medium text-white">
                 Password
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter dashboard password"
-                autoFocus
-                required
-                className="w-full rounded-lg border border-faint bg-surface-alt px-4 py-2.5 text-sm text-foreground placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
+              <div className="mt-2">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  autoComplete="current-password"
+                  autoFocus
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter dashboard password"
+                  className="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-primary sm:text-sm/6"
+                />
+              </div>
             </div>
 
             {error && (
-              <div className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-emergency">
+              <div className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={loading || !password}
-              className="w-full rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Signing in...
-                </span>
-              ) : (
-                'Sign in'
-              )}
-            </button>
+            <div>
+              <button
+                type="submit"
+                disabled={loading || !password}
+                className="flex w-full justify-center rounded-md bg-primary px-3 py-1.5 text-sm/6 font-semibold text-white hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {loading ? 'Signing in...' : 'Sign in'}
+              </button>
+            </div>
           </form>
+
+          <div>
+            <div className="mt-10 flex items-center gap-x-6">
+              <div className="w-full flex-1 border-t border-white/10" />
+              <p className="text-sm/6 font-medium text-nowrap text-white">Or continue with</p>
+              <div className="w-full flex-1 border-t border-white/10" />
+            </div>
+
+            <div className="mt-6 flex justify-center">
+              <div id="google-signin-btn" />
+            </div>
+          </div>
         </div>
 
-        <p className="mt-6 text-center text-xs text-sidebar-text/60">
+        <p className="mt-10 text-center text-sm/6 text-gray-500">
           Flood Doctor Internal Dashboard
         </p>
       </div>
