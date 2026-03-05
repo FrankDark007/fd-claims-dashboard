@@ -2,5 +2,9 @@ name = "fd-claims-dashboard"
 compatibility_date = "2024-12-01"
 pages_build_output_dir = "dist"
 
+[[kv_namespaces]]
+binding = "FD_CLAIMS_USERS"
+id = "b2ed4696a8184c43a3e6c5f9d6b20af9"
+
 [vars]
 NOTION_DATABASE_ID = "3a496fa362994550910a04937d747166"

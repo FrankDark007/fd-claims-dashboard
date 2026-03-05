@@ -1,21 +1,16 @@
 interface Env {
-  DASHBOARD_PASSWORD: string
-  AUTH_SECRET: string
-}
-
-async function generateToken(password: string, secret: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(password + secret + 'fd-claims')
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  FD_CLAIMS_USERS: KVNamespace
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
 
   // Skip auth for public endpoints
-  if (url.pathname === '/api/auth' || url.pathname === '/api/auth/google' || url.pathname === '/api/webhook') {
+  if (
+    url.pathname === '/api/auth' ||
+    url.pathname === '/api/auth/google' ||
+    url.pathname === '/api/webhook'
+  ) {
     return context.next()
   }
 
@@ -25,14 +20,31 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   const token = authHeader.slice(7)
-  const expectedToken = await generateToken(
-    context.env.DASHBOARD_PASSWORD,
-    context.env.AUTH_SECRET
-  )
 
-  if (token !== expectedToken) {
-    return Response.json({ error: 'Invalid token' }, { status: 401 })
+  // Look up session in KV
+  const sessionJson = await context.env.FD_CLAIMS_USERS.get(`session:${token}`)
+  if (!sessionJson) {
+    return Response.json({ error: 'Invalid or expired session' }, { status: 401 })
   }
+
+  const session = JSON.parse(sessionJson)
+
+  // Attach user info to request via header for downstream functions
+  const headers = new Headers(context.request.headers)
+  headers.set('X-User-Id', session.userId)
+  headers.set('X-User-Name', session.username)
+  headers.set('X-User-Display', session.displayName)
+  headers.set('X-User-Role', session.role)
+
+  // Create new request with user headers
+  const newRequest = new Request(context.request.url, {
+    method: context.request.method,
+    headers,
+    body: context.request.body,
+  })
+
+  // Replace the request in context
+  context.request = newRequest
 
   return context.next()
 }

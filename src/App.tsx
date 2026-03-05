@@ -1,10 +1,12 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { useClaims } from './hooks/useNotionData'
 import { useAuth } from './hooks/useAuth'
+import type { User } from './types/claim'
 import Sidebar from './components/Sidebar'
 import LoginPage from './components/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ClaimsPage from './pages/ClaimsPage'
+import UsersPage from './pages/UsersPage'
 
 function App() {
   const auth = useAuth()
@@ -15,17 +17,17 @@ function App() {
 
   return (
     <BrowserRouter>
-      <AuthenticatedApp token={auth.token!} onLogout={auth.logout} />
+      <AuthenticatedApp token={auth.token!} user={auth.user!} onLogout={auth.logout} />
     </BrowserRouter>
   )
 }
 
-function AuthenticatedApp({ token, onLogout }: { token: string; onLogout: () => void }) {
+function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User; onLogout: () => void }) {
   const { claims, loading, error } = useClaims(token)
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar onLogout={onLogout} />
+      <Sidebar user={user} onLogout={onLogout} />
       <main className="flex-1 overflow-y-auto p-8">
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-emergency">
@@ -37,6 +39,9 @@ function AuthenticatedApp({ token, onLogout }: { token: string; onLogout: () => 
           <Route path="/claims" element={<ClaimsPage claims={claims} loading={loading} />} />
           <Route path="/clients" element={<PlaceholderPage title="Clients" />} />
           <Route path="/contracts" element={<PlaceholderPage title="Contracts" />} />
+          {user.role === 'admin' && (
+            <Route path="/users" element={<UsersPage token={token} />} />
+          )}
         </Routes>
       </main>
     </div>

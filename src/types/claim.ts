@@ -28,6 +28,23 @@ export interface Claim {
   done: boolean
 }
 
+export interface User {
+  userId: string
+  username: string
+  displayName: string
+  role: 'admin' | 'member'
+  email: string | null
+}
+
+export interface UserRecord {
+  id: string
+  username: string
+  displayName: string
+  role: 'admin' | 'member'
+  email?: string
+  createdAt: string
+}
+
 export interface DashboardStats {
   totalClaims: number
   totalRevenue: number

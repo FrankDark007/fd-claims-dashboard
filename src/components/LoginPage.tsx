@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 
 interface LoginPageProps {
-  onLogin: (password: string) => Promise<boolean>
+  onLogin: (username: string, password: string) => Promise<boolean>
   onGoogleLogin: (credential: string) => Promise<boolean>
   loading: boolean
   error: string | null
@@ -21,11 +21,12 @@ declare global {
 }
 
 export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: LoginPageProps) {
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    await onLogin(password)
+    await onLogin(username, password)
   }
 
   const handleGoogleCallback = useCallback(
@@ -60,7 +61,7 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
   }, [handleGoogleCallback])
 
   return (
-    <div className="flex min-h-full flex-col justify-center py-12 sm:px-6 lg:px-8 bg-sidebar">
+    <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8 bg-sidebar">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary shadow-lg">
           <svg className="h-7 w-7 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -74,8 +75,28 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
       </div>
 
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
-        <div className="bg-gray-800/50 px-6 py-12 outline -outline-offset-1 outline-white/10 sm:rounded-lg sm:px-12">
+        <div className="bg-gray-800/50 px-6 py-12 outline outline-1 -outline-offset-1 outline-white/10 sm:rounded-lg sm:px-12">
           <form onSubmit={handleSubmit} className="space-y-6">
+            <div>
+              <label htmlFor="username" className="block text-sm/6 font-medium text-white">
+                Username
+              </label>
+              <div className="mt-2">
+                <input
+                  id="username"
+                  name="username"
+                  type="text"
+                  required
+                  autoComplete="username"
+                  autoFocus
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter username"
+                  className="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-primary sm:text-sm/6"
+                />
+              </div>
+            </div>
+
             <div>
               <label htmlFor="password" className="block text-sm/6 font-medium text-white">
                 Password
@@ -87,11 +108,10 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
                   type="password"
                   required
                   autoComplete="current-password"
-                  autoFocus
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter dashboard password"
-                  className="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-primary sm:text-sm/6"
+                  placeholder="Enter password"
+                  className="block w-full rounded-md bg-white/5 px-3 py-1.5 text-base text-white outline outline-1 -outline-offset-1 outline-white/10 placeholder:text-gray-500 focus:outline-2 focus:-outline-offset-2 focus:outline-primary sm:text-sm/6"
                 />
               </div>
             </div>
@@ -105,7 +125,7 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
             <div>
               <button
                 type="submit"
-                disabled={loading || !password}
+                disabled={loading || !username || !password}
                 className="flex w-full justify-center rounded-md bg-primary px-3 py-1.5 text-sm/6 font-semibold text-white hover:bg-primary-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {loading ? 'Signing in...' : 'Sign in'}

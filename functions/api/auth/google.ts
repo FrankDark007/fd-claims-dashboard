@@ -1,15 +1,14 @@
 interface Env {
   AUTH_SECRET: string
-  ALLOWED_EMAIL: string
-  DASHBOARD_PASSWORD: string
+  FD_CLAIMS_USERS: KVNamespace
 }
 
-async function generateToken(password: string, secret: string): Promise<string> {
+async function createSessionToken(userId: string, username: string, secret: string): Promise<string> {
   const encoder = new TextEncoder()
-  const data = encoder.encode(password + secret + 'fd-claims')
+  const nonce = crypto.randomUUID()
+  const data = encoder.encode(`${userId}:${username}:${nonce}:${secret}`)
   const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -27,21 +26,42 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const payload = await verifyRes.json() as { email: string; email_verified: string; name: string }
+    const email = payload.email.toLowerCase()
 
-    // Check email is allowed
-    const allowedEmails = (context.env.ALLOWED_EMAIL || '').split(',').map(e => e.trim().toLowerCase())
-    if (!allowedEmails.includes(payload.email.toLowerCase())) {
-      return Response.json({ error: `Access denied for ${payload.email}` }, { status: 403 })
+    // Look up user by email in KV — scan for matching email
+    const userList = await context.env.FD_CLAIMS_USERS.list({ prefix: 'user:' })
+    let matchedUser: { id: string; username: string; displayName: string; role: string; email?: string } | null = null
+
+    for (const key of userList.keys) {
+      const userJson = await context.env.FD_CLAIMS_USERS.get(key.name)
+      if (!userJson) continue
+      const user = JSON.parse(userJson)
+      if (user.email && user.email.toLowerCase() === email) {
+        matchedUser = user
+        break
+      }
     }
 
-    // Generate the same token format as password auth so middleware accepts it
-    const token = await generateToken(
-      context.env.DASHBOARD_PASSWORD,
-      context.env.AUTH_SECRET
-    )
+    if (!matchedUser) {
+      return Response.json({ error: `No account linked to ${payload.email}` }, { status: 403 })
+    }
 
-    return Response.json({ token, email: payload.email, name: payload.name })
-  } catch (error: any) {
-    return Response.json({ error: error.message }, { status: 500 })
+    // Create session token
+    const token = await createSessionToken(matchedUser.id, matchedUser.username, context.env.AUTH_SECRET)
+    const session = {
+      userId: matchedUser.id,
+      username: matchedUser.username,
+      displayName: matchedUser.displayName,
+      role: matchedUser.role,
+      email: matchedUser.email || null,
+    }
+    await context.env.FD_CLAIMS_USERS.put(`session:${token}`, JSON.stringify(session), {
+      expirationTtl: 60 * 60 * 24 * 7,
+    })
+
+    return Response.json({ token, user: session })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    return Response.json({ error: message }, { status: 500 })
   }
 }
