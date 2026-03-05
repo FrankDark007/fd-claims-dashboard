@@ -1,16 +1,21 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { PlusIcon } from '@heroicons/react/20/solid'
 import type { Claim } from '../types/claim'
 import StatusPill from '../components/StatusPill'
+import CreateProjectModal from '../components/CreateProjectModal'
 
 interface ProjectsPageProps {
   claims: Claim[]
   loading: boolean
+  token: string
+  onRefresh: () => void
 }
 
-export default function ProjectsPage({ claims, loading }: ProjectsPageProps) {
+export default function ProjectsPage({ claims, loading, token, onRefresh }: ProjectsPageProps) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [showCreate, setShowCreate] = useState(false)
 
   const filtered = claims.filter((c) => {
     const matchesSearch =
@@ -36,14 +41,23 @@ export default function ProjectsPage({ claims, loading }: ProjectsPageProps) {
           <h1 className="text-2xl font-bold text-foreground">Projects</h1>
           <p className="text-sm text-secondary mt-1">{claims.length} total projects</p>
         </div>
-        <a
-          href="https://www.notion.so/3a496fa362994550910a04937d747166"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover transition-colors shadow-sm"
-        >
-          Open in Notion
-        </a>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover transition-colors shadow-sm"
+          >
+            <PlusIcon className="size-4" />
+            Create Project
+          </button>
+          <a
+            href="https://www.notion.so/3a496fa362994550910a04937d747166"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            Open in Notion
+          </a>
+        </div>
       </div>
 
       {/* Toolbar */}
@@ -146,6 +160,13 @@ export default function ProjectsPage({ claims, loading }: ProjectsPageProps) {
           </div>
         )}
       </div>
+
+      <CreateProjectModal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        token={token}
+        onCreated={onRefresh}
+      />
     </div>
   )
 }

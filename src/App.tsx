@@ -25,7 +25,7 @@ function App() {
 }
 
 function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User; onLogout: () => void }) {
-  const { claims, loading, error } = useClaims(token)
+  const { claims, loading, error, refetch } = useClaims(token)
 
   return (
     <AppShell user={user} onLogout={onLogout}>
@@ -36,7 +36,7 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
       )}
       <Routes>
         <Route path="/" element={<DashboardPage claims={claims} loading={loading} />} />
-        <Route path="/projects" element={<ProjectsPage claims={claims} loading={loading} />} />
+        <Route path="/projects" element={<ProjectsPage claims={claims} loading={loading} token={token} onRefresh={refetch} />} />
         <Route path="/projects/:id" element={<ProjectDetailPage claims={claims} token={token} />} />
         <Route path="/calendar" element={<CalendarPage claims={claims} token={token} />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />

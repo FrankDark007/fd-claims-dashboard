@@ -10,11 +10,13 @@ id = "b2ed4696a8184c43a3e6c5f9d6b20af9"
 binding = "FD_PROJECTS_DATA"
 id = "18281eb24d2a4be2bdb52ac0ef39fa23"
 
-[[r2_buckets]]
-binding = "FD_PROJECT_FILES"
-bucket_name = "fd-project-files"
-# TODO: After enabling R2 in Cloudflare Dashboard, create bucket:
-#   npx wrangler r2 bucket create fd-project-files
+# Uncomment after enabling R2 in Cloudflare Dashboard:
+#   1. Go to dash.cloudflare.com → R2 → Enable
+#   2. npx wrangler r2 bucket create fd-project-files
+#   3. Uncomment the block below and redeploy
+# [[r2_buckets]]
+# binding = "FD_PROJECT_FILES"
+# bucket_name = "fd-project-files"
 
 [vars]
 NOTION_DATABASE_ID = "3a496fa362994550910a04937d747166"

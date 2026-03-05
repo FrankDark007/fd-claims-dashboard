@@ -43,7 +43,7 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
     script.defer = true
     script.onload = () => {
       window.google?.accounts.id.initialize({
-        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '904013675236-cmunivo30gunjeedudcn9utss0faa1ua.apps.googleusercontent.com',
+        client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID || '904013675236-trgb45v8t0o51dsen59hd984doadnj9q.apps.googleusercontent.com',
         callback: handleGoogleCallback,
       })
       const btnEl = document.getElementById('google-signin-btn')
