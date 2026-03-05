@@ -32,7 +32,7 @@ const tabs = [
 export default function ProjectDetailPage({ claims, token }: ProjectDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   const project = claims.find(c => c.id === id)
-  const { data, loading: dataLoading } = useProjectData(id, token)
+  const { data, loading: dataLoading, refetch } = useProjectData(id, token)
   const [activeTab, setActiveTab] = useState('overview')
 
   if (!project) {
@@ -210,7 +210,7 @@ export default function ProjectDetailPage({ claims, token }: ProjectDetailPagePr
       {/* Tab Content */}
       <div>
         {activeTab === 'overview' && <OverviewTab project={project} />}
-        {activeTab === 'files' && <FilesTab files={data.files} loading={dataLoading} />}
+        {activeTab === 'files' && <FilesTab files={data.files} loading={dataLoading} projectId={id!} token={token} onRefresh={refetch} />}
         {activeTab === 'timeline' && <TimelineTab project={project} invoiceEvents={data.invoiceEvents} />}
         {activeTab === 'email' && <EmailTab />}
       </div>

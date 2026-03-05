@@ -9,7 +9,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (
     url.pathname === '/api/auth' ||
     url.pathname === '/api/auth/google' ||
-    url.pathname === '/api/webhook'
+    url.pathname === '/api/webhook' ||
+    url.pathname.startsWith('/api/share/')
   ) {
     return context.next()
   }
