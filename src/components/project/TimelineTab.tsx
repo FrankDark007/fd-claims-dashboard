@@ -1,22 +1,24 @@
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
 import type { Project } from '../../types/claim'
 import type { InvoiceEvent } from '../../hooks/useProject'
+import type { ProjectNote } from '../../shared/projects'
 
 interface TimelineTabProps {
   project: Project
   invoiceEvents: InvoiceEvent[]
+  notes?: ProjectNote[]
 }
 
 interface ActivityItem {
   id: string
-  type: 'status' | 'invoice' | 'system'
+  type: 'status' | 'invoice' | 'system' | 'note'
   description: string
   person?: string
   date: string
   isCompleted?: boolean
 }
 
-function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[]): ActivityItem[] {
+function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[], notes: ProjectNote[]): ActivityItem[] {
   const items: ActivityItem[] = []
 
   // Project creation
@@ -39,8 +41,13 @@ function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[]): Activit
   if (project.invoiceStatus === 'Paid') {
     items.push({ id: 'paid', type: 'status', description: 'Invoice paid', date: project.paymentReceivedDate || project.updatedAt, isCompleted: true })
   }
+  if (project.invoiceSentDate) {
+    items.push({ id: 'invoice-sent', type: 'status', description: 'Invoice sent', date: project.invoiceSentDate, isCompleted: true })
+  }
+  if (project.dueDate) {
+    items.push({ id: 'invoice-due', type: 'status', description: `Invoice due date: ${new Date(project.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, date: project.dueDate })
+  }
 
-  // Invoice events from KV
   for (const event of invoiceEvents) {
     items.push({
       id: event.id,
@@ -52,14 +59,25 @@ function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[]): Activit
     })
   }
 
+  for (const note of notes) {
+    items.push({
+      id: note.id,
+      type: 'note',
+      description: note.body,
+      person: note.createdBy,
+      date: note.updatedAt,
+      isCompleted: note.pinned,
+    })
+  }
+
   // Sort newest first
   items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
   return items
 }
 
-export default function TimelineTab({ project, invoiceEvents }: TimelineTabProps) {
-  const timeline = buildTimeline(project, invoiceEvents)
+export default function TimelineTab({ project, invoiceEvents, notes = [] }: TimelineTabProps) {
+  const timeline = buildTimeline(project, invoiceEvents, notes)
 
   if (timeline.length === 0) {
     return (

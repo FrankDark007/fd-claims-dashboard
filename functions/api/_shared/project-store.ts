@@ -21,6 +21,7 @@ import type {
   InvoiceEvent,
   Project,
   ProjectFile,
+  ProjectNote,
   ProjectWriteInput,
 } from '../../../src/shared/projects'
 
@@ -82,6 +83,16 @@ interface InvoiceEventRecord {
   createdBy: string
   createdAt: string
   eventDate: string
+}
+
+interface ProjectNoteRecord {
+  id: string
+  projectId: string
+  body: string
+  pinned: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
 }
 
 const PROJECT_SELECT = `
@@ -148,6 +159,18 @@ const INVOICE_EVENT_SELECT = `
     created_at AS createdAt,
     event_date AS eventDate
   FROM invoice_events
+`
+
+const PROJECT_NOTE_SELECT = `
+  SELECT
+    id,
+    project_id AS projectId,
+    body,
+    pinned,
+    created_by AS createdBy,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM project_notes
 `
 
 function mapProjectRecord(record: ProjectRecord): Project {
@@ -217,6 +240,18 @@ function mapInvoiceEventRecord(record: InvoiceEventRecord): InvoiceEvent {
     createdBy: record.createdBy,
     createdAt: record.createdAt,
     eventDate: record.eventDate,
+  }
+}
+
+function mapProjectNoteRecord(record: ProjectNoteRecord): ProjectNote {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    body: record.body,
+    pinned: normalizeBoolean(record.pinned),
+    createdBy: record.createdBy,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
   }
 }
 
@@ -431,6 +466,101 @@ export async function deleteProjectFile(db: D1Database, projectId: string, fileI
 
   await db.prepare('DELETE FROM project_files WHERE project_id = ? AND id = ?').bind(projectId, fileId).run()
   return file
+}
+
+export async function listProjectNotes(db: D1Database, projectId: string): Promise<ProjectNote[]> {
+  const result = await db.prepare(
+    `${PROJECT_NOTE_SELECT} WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC, created_at DESC`
+  ).bind(projectId).all<ProjectNoteRecord>()
+
+  return (result.results ?? []).map(mapProjectNoteRecord)
+}
+
+export async function createProjectNote(
+  db: D1Database,
+  params: {
+    projectId: string
+    body: string
+    pinned?: boolean
+    createdBy: string
+  }
+): Promise<ProjectNote> {
+  const now = new Date().toISOString()
+  const note: ProjectNote = {
+    id: crypto.randomUUID(),
+    projectId: params.projectId,
+    body: normalizeOptionalText(params.body),
+    pinned: params.pinned ?? false,
+    createdBy: params.createdBy,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await db.prepare(`
+    INSERT INTO project_notes (
+      id, project_id, body, pinned, created_by, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    note.id,
+    note.projectId,
+    note.body,
+    note.pinned ? 1 : 0,
+    note.createdBy,
+    note.createdAt,
+    note.updatedAt
+  ).run()
+
+  return note
+}
+
+export async function updateProjectNote(
+  db: D1Database,
+  params: {
+    projectId: string
+    noteId: string
+    body?: string
+    pinned?: boolean
+  }
+): Promise<ProjectNote | null> {
+  const existing = await db.prepare(
+    `${PROJECT_NOTE_SELECT} WHERE project_id = ? AND id = ?`
+  ).bind(params.projectId, params.noteId).first<ProjectNoteRecord>()
+
+  if (!existing) {
+    return null
+  }
+
+  const next: ProjectNote = {
+    id: existing.id,
+    projectId: existing.projectId,
+    body: params.body !== undefined ? normalizeOptionalText(params.body) : existing.body,
+    pinned: params.pinned !== undefined ? params.pinned : normalizeBoolean(existing.pinned),
+    createdBy: existing.createdBy,
+    createdAt: existing.createdAt,
+    updatedAt: new Date().toISOString(),
+  }
+
+  await db.prepare(`
+    UPDATE project_notes
+    SET body = ?, pinned = ?, updated_at = ?
+    WHERE project_id = ? AND id = ?
+  `).bind(
+    next.body,
+    next.pinned ? 1 : 0,
+    next.updatedAt,
+    params.projectId,
+    params.noteId
+  ).run()
+
+  return next
+}
+
+export async function deleteProjectNote(db: D1Database, projectId: string, noteId: string): Promise<boolean> {
+  const result = await db.prepare(
+    'DELETE FROM project_notes WHERE project_id = ? AND id = ?'
+  ).bind(projectId, noteId).run()
+
+  return (result.meta.changes ?? 0) > 0
 }
 
 export async function listInvoiceEvents(db: D1Database, projectId?: string): Promise<InvoiceEvent[]> {

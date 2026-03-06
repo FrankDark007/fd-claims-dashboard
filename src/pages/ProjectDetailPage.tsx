@@ -9,11 +9,14 @@ import {
 } from '@heroicons/react/20/solid'
 import type { Project } from '../types/claim'
 import { useProject, useProjectData } from '../hooks/useProject'
+import { useProjectNotes } from '../hooks/useProjectNotes'
 import StatusPill from '../components/StatusPill'
 import OverviewTab from '../components/project/OverviewTab'
+import FinancialsTab from '../components/project/FinancialsTab'
 import ProgressTracker from '../components/project/ProgressTracker'
 import FilesTab from '../components/project/FilesTab'
 import TimelineTab from '../components/project/TimelineTab'
+import NotesTab from '../components/project/NotesTab'
 import EmailTab from '../components/project/EmailTab'
 
 interface ProjectDetailPageProps {
@@ -23,8 +26,10 @@ interface ProjectDetailPageProps {
 
 const tabs = [
   { name: 'Overview', id: 'overview' },
+  { name: 'Financials', id: 'financials' },
   { name: 'Files', id: 'files' },
   { name: 'Timeline', id: 'timeline' },
+  { name: 'Notes', id: 'notes' },
   { name: 'Email', id: 'email' },
 ]
 
@@ -33,6 +38,13 @@ export default function ProjectDetailPage({ projects, token }: ProjectDetailPage
   const { project: hydratedProject, loading: projectLoading } = useProject(id, token)
   const project = hydratedProject ?? projects.find((candidate) => candidate.id === id)
   const { data, loading: dataLoading, refetch } = useProjectData(id, token)
+  const {
+    notes,
+    loading: notesLoading,
+    addNote,
+    updateNote,
+    removeNote,
+  } = useProjectNotes(id, token)
   const [activeTab, setActiveTab] = useState('overview')
 
   if (!project && projectLoading) {
@@ -201,8 +213,18 @@ export default function ProjectDetailPage({ projects, token }: ProjectDetailPage
       {/* Tab Content */}
       <div>
         {activeTab === 'overview' && <OverviewTab project={project} />}
+        {activeTab === 'financials' && <FinancialsTab project={project} invoiceEvents={data.invoiceEvents} />}
         {activeTab === 'files' && <FilesTab files={data.files} loading={dataLoading} projectId={id!} token={token} onRefresh={refetch} />}
-        {activeTab === 'timeline' && <TimelineTab project={project} invoiceEvents={data.invoiceEvents} />}
+        {activeTab === 'timeline' && <TimelineTab project={project} invoiceEvents={data.invoiceEvents} notes={notes} />}
+        {activeTab === 'notes' && (
+          <NotesTab
+            notes={notes}
+            loading={notesLoading}
+            onCreate={addNote}
+            onUpdate={updateNote}
+            onDelete={removeNote}
+          />
+        )}
         {activeTab === 'email' && <EmailTab />}
       </div>
     </div>
