@@ -4,7 +4,9 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   PlusIcon,
+  EllipsisHorizontalIcon,
 } from '@heroicons/react/20/solid'
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react'
 import {
   CalendarDaysIcon,
   CurrencyDollarIcon,
@@ -30,10 +32,10 @@ function classNames(...classes: (string | boolean | undefined)[]) {
 }
 
 const EVENT_TYPE_CONFIG = {
-  sent: { icon: PaperAirplaneIcon, color: 'bg-blue-50 text-blue-700 border-blue-200', dot: 'bg-blue-500' },
-  reminder: { icon: BellAlertIcon, color: 'bg-yellow-50 text-yellow-700 border-yellow-200', dot: 'bg-yellow-500' },
-  paid: { icon: CurrencyDollarIcon, color: 'bg-green-50 text-green-700 border-green-200', dot: 'bg-green-500' },
-  disputed: { icon: ExclamationTriangleIcon, color: 'bg-red-50 text-red-700 border-red-200', dot: 'bg-red-500' },
+  sent: { icon: PaperAirplaneIcon, color: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
+  reminder: { icon: BellAlertIcon, color: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
+  paid: { icon: CurrencyDollarIcon, color: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+  disputed: { icon: ExclamationTriangleIcon, color: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
 } as const
 
 interface DayData {
@@ -58,7 +60,7 @@ interface FollowUpCalendarItem {
 function getDaysInMonth(year: number, month: number): DayData[] {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
-  const startOffset = firstDay.getDay() // 0=Sun
+  const startOffset = firstDay.getDay()
   const totalDays = lastDay.getDate()
 
   const today = new Date()
@@ -66,21 +68,18 @@ function getDaysInMonth(year: number, month: number): DayData[] {
 
   const days: DayData[] = []
 
-  // Previous month padding
   for (let i = startOffset - 1; i >= 0; i--) {
     const d = new Date(year, month, -i)
     const dateStr = formatDateStr(d)
     days.push({ date: d, dateStr, isCurrentMonth: false, isToday: dateStr === todayStr, events: [], followUps: [], projectsAdded: [] })
   }
 
-  // Current month
   for (let i = 1; i <= totalDays; i++) {
     const d = new Date(year, month, i)
     const dateStr = formatDateStr(d)
     days.push({ date: d, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, events: [], followUps: [], projectsAdded: [] })
   }
 
-  // Next month padding (fill to 42 = 6 rows)
   const remaining = 42 - days.length
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i)
@@ -111,11 +110,9 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
 
   const { events, loading, addEvent, updateEvent, removeEvent } = useInvoiceEvents(token)
 
-  // Build calendar data
   const days = useMemo(() => {
     const baseDays = getDaysInMonth(currentYear, currentMonth)
 
-    // Build lookup maps
     const eventsByDate = new Map<string, (InvoiceEventWithProject & { clientName?: string })[]>()
     for (const event of events) {
       const dateKey = event.eventDate.split('T')[0]
@@ -153,14 +150,11 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
 
     const projectsByDate = new Map<string, Project[]>()
     for (const project of projects) {
-      if (project.createdAt) {
-        const dateKey = project.createdAt.split('T')[0]
-        if (!projectsByDate.has(dateKey)) projectsByDate.set(dateKey, [])
-        projectsByDate.get(dateKey)!.push(project)
-      }
+      const dateKey = project.createdAt.split('T')[0]
+      if (!projectsByDate.has(dateKey)) projectsByDate.set(dateKey, [])
+      projectsByDate.get(dateKey)!.push(project)
     }
 
-    // Populate days
     for (const day of baseDays) {
       day.events = eventsByDate.get(day.dateStr) || []
       day.followUps = (followUpsByDate.get(day.dateStr) || []).sort((a, b) => {
@@ -176,34 +170,33 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
     return baseDays
   }, [currentYear, currentMonth, events, projects])
 
-  // Month summary stats
   const monthEvents = useMemo(() => {
-    return events.filter(e => {
-      const d = new Date(e.eventDate)
-      return d.getFullYear() === currentYear && d.getMonth() === currentMonth
+    return events.filter((event) => {
+      const eventDate = new Date(event.eventDate)
+      return eventDate.getFullYear() === currentYear && eventDate.getMonth() === currentMonth
     })
   }, [events, currentYear, currentMonth])
 
   const monthStats = useMemo(() => {
-    const sent = monthEvents.filter(e => e.type === 'sent')
-    const paid = monthEvents.filter(e => e.type === 'paid')
+    const sent = monthEvents.filter((event) => event.type === 'sent')
+    const paid = monthEvents.filter((event) => event.type === 'paid')
     const followUps = projects.filter((project) => {
       const date = project.nextFollowUpDate ?? project.dueDate
       if (!date || project.invoiceStatus === 'Paid') {
         return false
       }
 
-      const eventDate = new Date(`${date}T00:00:00`)
-      return eventDate.getFullYear() === currentYear && eventDate.getMonth() === currentMonth
+      const scheduleDate = new Date(`${date}T00:00:00`)
+      return scheduleDate.getFullYear() === currentYear && scheduleDate.getMonth() === currentMonth
     })
 
     return {
       sentCount: sent.length,
-      sentAmount: sent.reduce((s, e) => s + e.amount, 0),
+      sentAmount: sent.reduce((sum, event) => sum + event.amount, 0),
       paidCount: paid.length,
-      paidAmount: paid.reduce((s, e) => s + e.amount, 0),
-      reminderCount: monthEvents.filter(e => e.type === 'reminder').length,
-      disputedCount: monthEvents.filter(e => e.type === 'disputed').length,
+      paidAmount: paid.reduce((sum, event) => sum + event.amount, 0),
+      reminderCount: monthEvents.filter((event) => event.type === 'reminder').length,
+      disputedCount: monthEvents.filter((event) => event.type === 'disputed').length,
       followUpCount: followUps.length,
       overdueFollowUpCount: followUps.filter((project) => (project.nextFollowUpDate ?? project.dueDate ?? todayStr) < todayStr).length,
     }
@@ -233,18 +226,18 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
   const prevMonth = () => {
     if (currentMonth === 0) {
       setCurrentMonth(11)
-      setCurrentYear(y => y - 1)
+      setCurrentYear((year) => year - 1)
     } else {
-      setCurrentMonth(m => m - 1)
+      setCurrentMonth((month) => month - 1)
     }
   }
 
   const nextMonth = () => {
     if (currentMonth === 11) {
       setCurrentMonth(0)
-      setCurrentYear(y => y + 1)
+      setCurrentYear((year) => year + 1)
     } else {
-      setCurrentMonth(m => m + 1)
+      setCurrentMonth((month) => month + 1)
     }
   }
 
@@ -289,313 +282,310 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
   }
 
   return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Invoice Calendar</h1>
-          <p className="text-sm text-secondary mt-1">Track invoice events across all projects</p>
+    <div className="space-y-8">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Calendar</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Collections and invoice activity by day.</h2>
+            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
+              See invoice sends, reminders, disputes, and payment dates in the same monthly grid as follow-up schedules.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setEditingEvent(null)
+              setSelectedDate(undefined)
+              setShowAddModal(true)
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover"
+          >
+            <PlusIcon className="size-4" />
+            Add event
+          </button>
         </div>
-        <button
-          onClick={() => {
-            setEditingEvent(null)
-            setSelectedDate(undefined)
-            setShowAddModal(true)
-          }}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
-        >
-          <PlusIcon className="size-4" />
-          Add Event
-        </button>
-      </div>
 
-      {/* Month Summary Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-6">
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <PaperAirplaneIcon className="size-4 text-blue-500" />
-            Sent
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.sentCount}</p>
-          <p className="text-xs text-gray-500">${monthStats.sentAmount.toLocaleString()}</p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="Invoices sent" value={monthStats.sentCount.toString()} detail={`$${monthStats.sentAmount.toLocaleString()} sent`} />
+          <MetricCard label="Invoices paid" value={monthStats.paidCount.toString()} detail={`$${monthStats.paidAmount.toLocaleString()} collected`} />
+          <MetricCard label="Reminders / disputes" value={`${monthStats.reminderCount}/${monthStats.disputedCount}`} detail="Follow-up pressure this month" />
+          <MetricCard label="Scheduled follow-ups" value={monthStats.followUpCount.toString()} detail={`${monthStats.overdueFollowUpCount} already overdue`} />
         </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <CurrencyDollarIcon className="size-4 text-green-500" />
-            Paid
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.paidCount}</p>
-          <p className="text-xs text-gray-500">${monthStats.paidAmount.toLocaleString()}</p>
-        </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <BellAlertIcon className="size-4 text-yellow-500" />
-            Reminders
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.reminderCount}</p>
-        </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <ExclamationTriangleIcon className="size-4 text-red-500" />
-            Disputed
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.disputedCount}</p>
-        </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <BellAlertIcon className="size-4 text-amber-500" />
-            Follow-ups
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.followUpCount}</p>
-        </div>
-        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
-          <div className="flex items-center gap-2 text-sm text-gray-500">
-            <ExclamationTriangleIcon className="size-4 text-orange-500" />
-            Past Due
-          </div>
-          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.overdueFollowUpCount}</p>
-        </div>
-      </div>
-
-      {/* Calendar Navigation */}
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold text-gray-900">
-          {MONTH_NAMES[currentMonth]} {currentYear}
-        </h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={goToToday}
-            className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-          >
-            Today
-          </button>
-          <button
-            onClick={prevMonth}
-            className="rounded-md bg-white p-1.5 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-          >
-            <ChevronLeftIcon className="size-5 text-gray-600" />
-          </button>
-          <button
-            onClick={nextMonth}
-            className="rounded-md bg-white p-1.5 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-          >
-            <ChevronRightIcon className="size-5 text-gray-600" />
-          </button>
-        </div>
-      </div>
+      </section>
 
       {loading ? (
         <div className="flex items-center justify-center py-20">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
         </div>
       ) : (
-        <>
-          {/* Calendar Grid */}
-          <div className="overflow-hidden rounded-lg bg-white shadow">
-            {/* Day headers */}
-            <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs font-semibold text-gray-700">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((d) => (
-                <div key={d} className="py-2">{d}</div>
+        <div className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
+          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <header className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+              <h3 className="text-base font-semibold text-slate-900">
+                <time dateTime={`${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`}>
+                  {MONTH_NAMES[currentMonth]} {currentYear}
+                </time>
+              </h3>
+              <div className="flex items-center">
+                <div className="relative flex items-center rounded-full border border-slate-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={prevMonth}
+                    className="flex h-10 w-10 items-center justify-center rounded-l-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+                  >
+                    <span className="sr-only">Previous month</span>
+                    <ChevronLeftIcon aria-hidden="true" className="size-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={goToToday}
+                    className="hidden px-4 text-sm font-semibold text-slate-900 transition hover:bg-slate-50 md:block"
+                  >
+                    Today
+                  </button>
+                  <span className="relative h-5 w-px bg-slate-200 md:hidden" />
+                  <button
+                    type="button"
+                    onClick={nextMonth}
+                    className="flex h-10 w-10 items-center justify-center rounded-r-full text-slate-400 transition hover:bg-slate-50 hover:text-slate-600"
+                  >
+                    <span className="sr-only">Next month</span>
+                    <ChevronRightIcon aria-hidden="true" className="size-5" />
+                  </button>
+                </div>
+                <Menu as="div" className="relative ml-4 md:hidden">
+                  <MenuButton className="-mx-2 flex items-center rounded-full border border-transparent p-2 text-slate-400 hover:text-slate-600">
+                    <span className="sr-only">Open menu</span>
+                    <EllipsisHorizontalIcon aria-hidden="true" className="size-5" />
+                  </MenuButton>
+                  <MenuItems
+                    transition
+                    className="absolute right-0 z-10 mt-3 w-40 origin-top-right overflow-hidden rounded-2xl bg-white shadow-lg outline outline-1 outline-black/5 transition data-[closed]:scale-95 data-[closed]:transform data-[closed]:opacity-0 data-[enter]:duration-100 data-[enter]:ease-out data-[leave]:duration-75 data-[leave]:ease-in"
+                  >
+                    <div className="py-1">
+                      <MenuItem>
+                        <button
+                          type="button"
+                          onClick={goToToday}
+                          className="block w-full px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-slate-100 data-[focus]:outline-none"
+                        >
+                          Go to today
+                        </button>
+                      </MenuItem>
+                      <MenuItem>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingEvent(null)
+                            setSelectedDate(undefined)
+                            setShowAddModal(true)
+                          }}
+                          className="block w-full px-4 py-2 text-left text-sm text-slate-700 data-[focus]:bg-slate-100 data-[focus]:outline-none"
+                        >
+                          Create event
+                        </button>
+                      </MenuItem>
+                    </div>
+                  </MenuItems>
+                </Menu>
+              </div>
+            </header>
+
+            <div className="grid grid-cols-7 gap-px border-b border-slate-200 bg-slate-200 text-center text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <div key={day} className="bg-white py-3">{day}</div>
               ))}
             </div>
 
-            {/* Day cells */}
-            <div className="grid grid-cols-7 divide-x divide-y divide-gray-100">
+            <div className="grid grid-cols-7 gap-px bg-slate-200">
               {days.map((day) => (
-                <div
+                <button
                   key={day.dateStr}
+                  type="button"
                   onClick={() => handleDayClick(day.dateStr)}
                   className={classNames(
-                    'min-h-[100px] p-1.5 cursor-pointer hover:bg-gray-50 transition-colors',
-                    !day.isCurrentMonth && 'bg-gray-50/50',
+                    'min-h-[138px] bg-white p-2 text-left align-top transition hover:bg-slate-50',
+                    !day.isCurrentMonth && 'bg-slate-50 text-slate-400',
                   )}
                 >
-                  {/* Day number */}
                   <div className="flex items-center justify-between">
                     <span
                       className={classNames(
-                        'inline-flex size-6 items-center justify-center rounded-full text-xs font-medium',
+                        'inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold',
                         day.isToday && 'bg-primary text-white',
-                        !day.isToday && day.isCurrentMonth && 'text-gray-900',
-                        !day.isToday && !day.isCurrentMonth && 'text-gray-400',
+                        !day.isToday && day.isCurrentMonth && 'text-slate-900',
+                        !day.isToday && !day.isCurrentMonth && 'text-slate-400',
                       )}
                     >
                       {day.date.getDate()}
                     </span>
-                    {day.projectsAdded.length > 0 && (
-                      <span className="text-[10px] text-gray-400">
-                        +{day.projectsAdded.length} proj
+                    {(day.projectsAdded.length > 0 || day.followUps.length + day.events.length > 0) ? (
+                      <span className="text-[11px] font-medium text-slate-400">
+                        {day.followUps.length + day.events.length + day.projectsAdded.length} items
                       </span>
-                    )}
+                    ) : null}
                   </div>
 
-                  {/* Events */}
-                  <div className="mt-1 space-y-0.5">
+                  <div className="mt-2 space-y-1">
                     {day.followUps.slice(0, 2).map((item) => (
                       <Link
                         key={`${item.projectId}-${item.kind}`}
                         to={`/projects/${item.projectId}`}
                         onClick={(event) => event.stopPropagation()}
-                        className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium border ${
+                        className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-[11px] font-semibold ${
                           item.kind === 'follow_up'
                             ? 'border-amber-200 bg-amber-50 text-amber-700'
                             : 'border-orange-200 bg-orange-50 text-orange-700'
                         }`}
                         title={`${item.clientName}: ${item.kind === 'follow_up' ? 'Follow-up scheduled' : 'Due date'}`}
                       >
-                        <span className={`inline-block size-1.5 shrink-0 rounded-full ${
-                          item.kind === 'follow_up' ? 'bg-amber-500' : 'bg-orange-500'
-                        }`} />
-                        <span className="truncate">{item.clientName.split(' ')[0]}</span>
-                        <span className="ml-auto shrink-0">{item.kind === 'follow_up' ? 'FU' : 'Due'}</span>
+                        <span className={`inline-block size-1.5 shrink-0 rounded-full ${item.kind === 'follow_up' ? 'bg-amber-500' : 'bg-orange-500'}`} />
+                        <span className="truncate">{item.clientName}</span>
                       </Link>
                     ))}
-                    {day.events.slice(0, 3).map((event) => {
+                    {day.events.slice(0, 2).map((event) => {
                       const config = EVENT_TYPE_CONFIG[event.type]
                       return (
                         <div
                           key={event.id}
-                          className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium border ${config.color}`}
+                          className={`flex items-center gap-2 rounded-lg border px-2 py-1 text-[11px] font-semibold ${config.color}`}
                           title={`${event.clientName || 'Unknown'}: $${event.amount.toLocaleString()} — ${event.type}`}
                         >
                           <span className={`inline-block size-1.5 shrink-0 rounded-full ${config.dot}`} />
-                          <span className="truncate">
-                            {event.clientName ? event.clientName.split(' ')[0] : 'Unknown'}
-                          </span>
-                          <span className="ml-auto shrink-0">${event.amount >= 1000 ? `${(event.amount / 1000).toFixed(0)}k` : event.amount}</span>
+                          <span className="truncate">{event.clientName || 'Unknown project'}</span>
                         </div>
                       )
                     })}
-                    {day.followUps.length + day.events.length > 5 && (
-                      <p className="text-[10px] text-gray-400 pl-1">+{day.followUps.length + day.events.length - 5} more</p>
-                    )}
+                    {day.followUps.length + day.events.length > 4 ? (
+                      <p className="pl-1 text-[11px] text-slate-400">+{day.followUps.length + day.events.length - 4} more</p>
+                    ) : null}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
-          </div>
+          </section>
 
-          <div className="mt-8">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Upcoming Follow-ups</h3>
-            {upcomingFollowUps.length === 0 ? (
-              <div className="rounded-lg bg-white shadow px-6 py-10 text-center">
-                <BellAlertIcon className="mx-auto size-10 text-gray-400" />
-                <p className="mt-3 text-sm font-medium text-gray-900">No follow-ups scheduled</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Set invoice sent or next follow-up dates in project financials to populate the queue.
-                </p>
+          <div className="space-y-8">
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Upcoming follow-ups</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-950">What needs attention next</h3>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-hidden rounded-lg bg-white shadow">
-                <ul className="divide-y divide-gray-100">
+
+              {upcomingFollowUps.length === 0 ? (
+                <div className="py-10 text-center">
+                  <BellAlertIcon className="mx-auto size-10 text-slate-300" />
+                  <p className="mt-3 text-sm font-medium text-slate-900">No follow-ups scheduled</p>
+                  <p className="mt-1 text-sm text-slate-500">Set invoice sent or next follow-up dates in project financials.</p>
+                </div>
+              ) : (
+                <ul className="mt-6 space-y-3">
                   {upcomingFollowUps.map(({ project, date, kind, overdue }) => (
-                    <li key={`${project.id}-${kind}-${date}`} className="flex items-center justify-between gap-4 px-4 py-3">
-                      <div className="min-w-0">
-                        <Link to={`/projects/${project.id}`} className="truncate text-sm font-medium text-gray-900 hover:text-primary">
-                          {project.clientName}
-                        </Link>
-                        <p className="text-xs text-gray-500">
-                          {kind} • {project.projectName || project.projectType || 'Project detail'}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className={`text-sm font-semibold ${overdue ? 'text-red-700' : 'text-gray-900'}`}>
-                          {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {describeSchedule(date, todayStr)}
-                        </p>
+                    <li key={`${project.id}-${kind}-${date}`} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <Link to={`/projects/${project.id}`} className="truncate text-sm font-semibold text-slate-900 hover:text-primary">
+                            {project.clientName}
+                          </Link>
+                          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">{kind}</p>
+                          <p className="mt-2 text-sm text-slate-600">{project.projectName || project.projectType || 'Project detail'}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-semibold ${overdue ? 'text-rose-700' : 'text-slate-900'}`}>
+                            {formatLongDate(date)}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">{describeSchedule(date, todayStr)}</p>
+                        </div>
                       </div>
                     </li>
                   ))}
                 </ul>
-              </div>
-            )}
-          </div>
+              )}
+            </section>
 
-          {/* Upcoming Events List */}
-          <div className="mt-8">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900">Recent Events</h3>
-            {events.length === 0 ? (
-              <div className="rounded-lg bg-white shadow px-6 py-10 text-center">
-                <CalendarDaysIcon className="mx-auto size-10 text-gray-400" />
-                <p className="mt-3 text-sm font-medium text-gray-900">No invoice events yet</p>
-                <p className="mt-1 text-sm text-gray-500">
-                  Track when invoices are sent, paid, or disputed.
-                </p>
+            <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Recent events</p>
+                  <h3 className="mt-2 text-xl font-semibold text-slate-950">Latest invoice activity</h3>
+                </div>
               </div>
-            ) : (
-              <div className="overflow-hidden rounded-lg bg-white shadow">
-                <ul className="divide-y divide-gray-100">
-                  {events.slice(0, 20).map((event) => {
+
+              {events.length === 0 ? (
+                <div className="py-10 text-center">
+                  <CalendarDaysIcon className="mx-auto size-10 text-slate-300" />
+                  <p className="mt-3 text-sm font-medium text-slate-900">No invoice events yet</p>
+                  <p className="mt-1 text-sm text-slate-500">Track when invoices are sent, paid, or disputed.</p>
+                </div>
+              ) : (
+                <ul className="mt-6 space-y-4">
+                  {events.slice(0, 10).map((event) => {
                     const config = EVENT_TYPE_CONFIG[event.type]
                     const Icon = config.icon
                     const project = projects.find((candidate) => candidate.id === event.projectId)
 
                     return (
-                      <li key={event.id} className="flex items-center gap-4 px-4 py-3">
-                        <div className={`flex size-9 shrink-0 items-center justify-center rounded-lg ${config.color}`}>
-                          <Icon className="size-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            {project ? (
-                              <Link
-                                to={`/projects/${project.id}`}
-                                className="truncate text-sm font-medium text-gray-900 hover:text-primary"
-                              >
-                                {project.clientName}
-                              </Link>
-                            ) : (
-                              <span className="truncate text-sm font-medium text-gray-900">Unknown Project</span>
-                            )}
-                            <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${config.color}`}>
-                              {event.type}
-                            </span>
+                      <li key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="flex items-start gap-4">
+                          <div className={`flex size-10 shrink-0 items-center justify-center rounded-2xl border ${config.color}`}>
+                            <Icon className="size-5" />
                           </div>
-                          <p className="text-xs text-gray-500">
-                            ${event.amount.toLocaleString()} &middot;{' '}
-                            {new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            {event.recipient && ` • ${event.recipient}`}
-                            {event.notes && ` — ${event.notes}`}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-900">
-                            ${event.amount.toLocaleString()}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingEvent(event)
-                              setSelectedDate(event.eventDate)
-                              setShowAddModal(true)
-                            }}
-                            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-primary"
-                            title="Edit event"
-                          >
-                            <PencilSquareIcon className="size-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteEvent(event)}
-                            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600"
-                            title="Delete event"
-                          >
-                            <TrashIcon className="size-4" />
-                          </button>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {project ? (
+                                <Link to={`/projects/${project.id}`} className="truncate text-sm font-semibold text-slate-900 hover:text-primary">
+                                  {project.clientName}
+                                </Link>
+                              ) : (
+                                <span className="truncate text-sm font-semibold text-slate-900">Unknown project</span>
+                              )}
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${config.color}`}>
+                                {event.type}
+                              </span>
+                            </div>
+                            <p className="mt-2 text-sm text-slate-600">
+                              ${event.amount.toLocaleString()} on {formatLongDate(event.eventDate)}
+                              {event.recipient ? ` · ${event.recipient}` : ''}
+                            </p>
+                            {event.notes ? (
+                              <p className="mt-1 text-sm text-slate-500">{event.notes}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingEvent(event)
+                                setSelectedDate(event.eventDate)
+                                setShowAddModal(true)
+                              }}
+                              className="rounded-full p-2 text-slate-400 transition hover:bg-white hover:text-primary"
+                              title="Edit event"
+                            >
+                              <PencilSquareIcon className="size-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteEvent(event)}
+                              className="rounded-full p-2 text-slate-400 transition hover:bg-white hover:text-rose-600"
+                              title="Delete event"
+                            >
+                              <TrashIcon className="size-4" />
+                            </button>
+                          </div>
                         </div>
                       </li>
                     )
                   })}
                 </ul>
-              </div>
-            )}
+              )}
+            </section>
           </div>
-        </>
+        </div>
       )}
 
-      {/* Add Event Modal */}
       <AddInvoiceEventModal
         open={showAddModal}
         onClose={() => {
@@ -620,9 +610,27 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
   )
 }
 
+function MetricCard({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-2 text-sm text-slate-600">{detail}</p>
+    </div>
+  )
+}
+
+function formatLongDate(date: string) {
+  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
 function describeSchedule(date: string, today: string) {
   const diff = Math.floor(
-    (new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000
+    (new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000,
   )
 
   if (diff < 0) {

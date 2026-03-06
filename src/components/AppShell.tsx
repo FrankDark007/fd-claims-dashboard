@@ -54,16 +54,32 @@ function SidebarContent({ allNav, isCurrentPath, onNavigate }: SidebarContentPro
   return (
     <>
       <div className="flex h-16 shrink-0 items-center gap-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary shadow-sm shadow-primary/30">
           <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
           </svg>
         </div>
-        <span className="text-lg font-bold text-white tracking-tight">Flood Doctor</span>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/80">Operations</p>
+          <span className="text-lg font-bold tracking-tight text-white">Flood Doctor</span>
+        </div>
+      </div>
+      <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">System status</p>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">D1 + R2 workflow live</p>
+            <p className="mt-1 text-xs text-gray-400">Collections, documents, and timeline activity are synced in-app.</p>
+          </div>
+          <span className="inline-flex items-center rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-semibold text-emerald-300">
+            Healthy
+          </span>
+        </div>
       </div>
       <nav className="flex flex-1 flex-col">
         <ul role="list" className="flex flex-1 flex-col gap-y-7">
           <li>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.24em] text-gray-500">Workspace</p>
             <ul role="list" className="-mx-2 space-y-1">
               {allNav.map((item) => (
                 <li key={item.name}>
@@ -107,6 +123,12 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
 
   const allNav = user.role === 'admin' ? [...navigation, ...adminNavigation] : navigation
   const initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  const routeMeta = getRouteMeta(location.pathname)
+  const todayLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  })
 
   function isCurrentPath(href: string) {
     if (href === '/') return location.pathname === '/'
@@ -151,7 +173,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
       {/* Main content area */}
       <div className="lg:pl-72">
         {/* Top bar */}
-        <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8">
+        <div className="sticky top-0 z-40 flex shrink-0 items-center gap-x-4 border-b border-gray-200/80 bg-white/90 px-4 py-4 backdrop-blur-sm sm:gap-x-6 sm:px-6 lg:px-8">
           <button
             type="button"
             onClick={() => setSidebarOpen(true)}
@@ -163,20 +185,36 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
 
           <div aria-hidden="true" className="h-6 w-px bg-gray-900/10 lg:hidden" />
 
-          <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
-            <form action="#" method="GET" className="grid flex-1 grid-cols-1">
-              <input
-                name="search"
-                placeholder="Search projects..."
-                aria-label="Search"
-                className="col-start-1 row-start-1 block size-full bg-white pl-8 text-base text-gray-900 outline-none placeholder:text-gray-400 sm:text-sm/6"
-              />
-              <MagnifyingGlassIcon
-                aria-hidden="true"
-                className="pointer-events-none col-start-1 row-start-1 size-5 self-center text-gray-400"
-              />
-            </form>
+          <div className="flex flex-1 items-center justify-between gap-x-4 lg:gap-x-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Flood Doctor Ops</p>
+                <span className="hidden items-center rounded-full bg-primary-light px-2.5 py-1 text-[11px] font-semibold text-primary sm:inline-flex">
+                  Live in D1
+                </span>
+              </div>
+              <div className="mt-1 flex items-center gap-3">
+                <h1 className="truncate text-lg font-semibold text-gray-950">{routeMeta.title}</h1>
+                <div className="relative hidden md:block md:flex-1">
+                  <MagnifyingGlassIcon
+                    aria-hidden="true"
+                    className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    name="search"
+                    placeholder="Search clients, claim numbers, adjusters..."
+                    aria-label="Search"
+                    className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 hidden text-sm text-gray-500 sm:block">{routeMeta.description}</p>
+            </div>
             <div className="flex items-center gap-x-4 lg:gap-x-6">
+              <div className="hidden rounded-2xl border border-gray-200 bg-gray-50 px-4 py-2 lg:block">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">Today</p>
+                <p className="mt-1 text-sm font-semibold text-gray-900">{todayLabel}</p>
+              </div>
               <div aria-hidden="true" className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-900/10" />
 
               {/* Profile dropdown */}
@@ -228,4 +266,53 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
       </div>
     </div>
   )
+}
+
+function getRouteMeta(pathname: string) {
+  if (pathname === '/') {
+    return {
+      title: 'Dashboard',
+      description: 'Collections, document readiness, and active project workload in one view.',
+    }
+  }
+
+  if (pathname === '/projects') {
+    return {
+      title: 'Projects',
+      description: 'Filter the full claims pipeline by billing state, project status, and follow-up pressure.',
+    }
+  }
+
+  if (pathname.startsWith('/projects/')) {
+    return {
+      title: 'Project Workspace',
+      description: 'Financials, files, timeline, tasks, and notes for the selected claim.',
+    }
+  }
+
+  if (pathname === '/calendar') {
+    return {
+      title: 'Calendar',
+      description: 'Track collection follow-ups, due dates, and invoice activity across the schedule.',
+    }
+  }
+
+  if (pathname === '/reports') {
+    return {
+      title: 'Reports',
+      description: 'Collections performance, document gaps, and project mix for operational review.',
+    }
+  }
+
+  if (pathname === '/users') {
+    return {
+      title: 'Users',
+      description: 'Manage access for the internal operations team.',
+    }
+  }
+
+  return {
+    title: 'Workspace',
+    description: 'Flood Doctor claims operations.',
+  }
 }

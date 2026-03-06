@@ -23,6 +23,9 @@ declare global {
 export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: LoginPageProps) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const isLocalhost =
+    typeof window !== 'undefined' &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,6 +40,10 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
   )
 
   useEffect(() => {
+    if (isLocalhost) {
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://accounts.google.com/gsi/client'
     script.async = true
@@ -58,7 +65,7 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
     }
     document.head.appendChild(script)
     return () => { document.head.removeChild(script) }
-  }, [handleGoogleCallback])
+  }, [handleGoogleCallback, isLocalhost])
 
   return (
     <div className="flex min-h-screen flex-col justify-center py-12 sm:px-6 lg:px-8 bg-sidebar">
@@ -77,6 +84,12 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-[480px]">
         <div className="bg-gray-800/50 px-6 py-12 outline outline-1 -outline-offset-1 outline-white/10 sm:rounded-lg sm:px-12">
           <form onSubmit={handleSubmit} className="space-y-6">
+            {isLocalhost && (
+              <div className="rounded-md border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100">
+                Local Pages/Vite auth uses the seeded admin account: <span className="font-semibold">frank</span> / <span className="font-semibold">codex-local</span>
+              </div>
+            )}
+
             <div>
               <label htmlFor="username" className="block text-sm/6 font-medium text-white">
                 Username
@@ -136,12 +149,18 @@ export default function LoginPage({ onLogin, onGoogleLogin, loading, error }: Lo
           <div>
             <div className="mt-10 flex items-center gap-x-6">
               <div className="w-full flex-1 border-t border-white/10" />
-              <p className="text-sm/6 font-medium text-nowrap text-white">Or continue with</p>
+              <p className="text-sm/6 font-medium text-nowrap text-white">{isLocalhost ? 'Local development' : 'Or continue with'}</p>
               <div className="w-full flex-1 border-t border-white/10" />
             </div>
 
             <div className="mt-6 flex justify-center">
-              <div id="google-signin-btn" />
+              {isLocalhost ? (
+                <p className="max-w-sm text-center text-sm text-gray-400">
+                  Google sign-in is disabled on localhost because the production OAuth origin is not registered for local Pages dev.
+                </p>
+              ) : (
+                <div id="google-signin-btn" />
+              )}
             </div>
           </div>
         </div>

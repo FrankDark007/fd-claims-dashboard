@@ -79,6 +79,13 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
       return aFollowUp.localeCompare(bFollowUp) || a.clientName.localeCompare(b.clientName)
     })
 
+  const activeProjects = projects.filter((project) => project.projectStatus !== 'Complete' && project.projectStatus !== 'Archived').length
+  const unpaidProjects = projects.filter((project) => project.invoiceStatus !== 'Paid').length
+  const attentionProjects = projects.filter((project) => {
+    const followUpDate = project.nextFollowUpDate ?? project.dueDate
+    return project.invoiceStatus !== 'Paid' && followUpDate !== null && followUpDate <= today
+  }).length
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -88,162 +95,208 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
   }
 
   return (
-    <div>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-          <p className="text-sm text-secondary mt-1">{projects.length} total projects</p>
-        </div>
-        <div className="flex items-center gap-3">
+    <div className="space-y-8">
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm lg:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Projects board</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Work the entire claims pipeline from one table.</h2>
+            <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
+              Search by customer, carrier, claim, or contact details, then narrow the board by billing pressure,
+              project status, and job type.
+            </p>
+          </div>
           <button
             onClick={() => setShowCreate(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover transition-colors shadow-sm"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover"
           >
             <PlusIcon className="size-4" />
-            Create Project
+            Create project
           </button>
         </div>
-      </div>
 
-      {/* Toolbar */}
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search clients, projects, Xactimate #..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-faint bg-surface py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-          />
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <ToplineStat label="Active" value={activeProjects.toString()} detail="Open production work" />
+          <ToplineStat label="Unpaid" value={unpaidProjects.toString()} detail="Projects not fully collected" />
+          <ToplineStat label="Needs attention" value={attentionProjects.toString()} detail="Due now or overdue follow-up" />
         </div>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="all">All Statuses</option>
-          <option value="Draft">Draft</option>
-          <option value="Sent">Sent</option>
-          <option value="Paid">Paid</option>
-          <option value="Overdue">Overdue</option>
-        </select>
-        <select
-          value={filterProjectStatus}
-          onChange={(e) => setFilterProjectStatus(e.target.value)}
-          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="all">All Project States</option>
-          <option value="Active">Active</option>
-          <option value="On Hold">On Hold</option>
-          <option value="Complete">Complete</option>
-          <option value="Archived">Archived</option>
-        </select>
-        <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
-          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="all">All Types</option>
-          <option value="Water Mitigation">Water Mitigation</option>
-          <option value="Pack-out">Pack-out</option>
-          <option value="Mold Remediation">Mold Remediation</option>
-        </select>
-        <select
-          value={filterCollections}
-          onChange={(e) => setFilterCollections(e.target.value)}
-          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        >
-          <option value="all">All Collections</option>
-          <option value="needs-attention">Needs Attention</option>
-          <option value="upcoming">Upcoming Follow-up</option>
-          <option value="paid">Collected</option>
-        </select>
-        <span className="text-sm text-muted">{filtered.length} projects</span>
-      </div>
+      </section>
 
-      {/* Table */}
-      <div className="overflow-x-auto rounded-xl bg-surface shadow-md">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-faint">
-              <th className="px-4 py-3 font-semibold text-secondary">#</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Client</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Project</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Type</th>
-              <th className="px-4 py-3 font-semibold text-secondary text-right">Amount</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Status</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Contract</th>
-              <th className="px-4 py-3 font-semibold text-secondary">COC</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Due</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Next Follow-up</th>
-              <th className="px-4 py-3 font-semibold text-secondary"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-faint/50">
-            {filtered.map((project) => (
-              <tr key={project.id} className="hover:bg-surface-alt transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-muted">
-                  {project.invoiceId || '\u2014'}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="font-medium text-foreground">{project.clientName}</div>
-                  {project.xactimateNumber && (
-                    <div className="text-xs text-muted">XA: {project.xactimateNumber}</div>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-secondary max-w-[160px] truncate">
-                  {project.projectName || '\u2014'}
-                </td>
-                <td className="px-4 py-3">
-                  {project.projectType ? (
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      project.projectType === 'Water Mitigation' ? 'bg-blue-100 text-blue-700' :
-                      project.projectType === 'Pack-out' ? 'bg-purple-100 text-purple-700' :
-                      project.projectType === 'Mold Remediation' ? 'bg-red-100 text-red-700' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      {project.projectType}
-                    </span>
-                  ) : <span className="text-muted text-xs">{'\u2014'}</span>}
-                </td>
-                <td className="px-4 py-3 text-right font-medium tabular-nums">
-                  {project.amount ? `$${project.amount.toLocaleString()}` : '\u2014'}
-                </td>
-                <td className="px-4 py-3"><StatusPill value={project.invoiceStatus} /></td>
-                <td className="px-4 py-3"><StatusPill value={project.contractStatus} /></td>
-                <td className="px-4 py-3"><StatusPill value={project.cocStatus} /></td>
-                <td className="px-4 py-3 text-xs whitespace-nowrap">
-                  <span className={project.dueDate && project.dueDate < today && project.invoiceStatus !== 'Paid' ? 'font-semibold text-red-700' : 'text-muted'}>
-                    {formatDate(project.dueDate)}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-xs whitespace-nowrap">
-                  <span className={followUpTone(project, today)}>
-                    {formatDate(project.nextFollowUpDate)}
-                  </span>
-                </td>
-                <td className="px-4 py-3">
-                  <Link
-                    to={`/projects/${project.id}`}
-                    className="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                  >
-                    View
-                  </Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="grid gap-4 lg:grid-cols-[1.8fr_repeat(4,minmax(0,1fr))]">
+          <FilterField label="Search">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Client, claim #, adjuster, carrier..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder:text-slate-400 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+              />
+            </div>
+          </FilterField>
+          <FilterField label="Invoice status">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All statuses</option>
+              <option value="Draft">Draft</option>
+              <option value="Sent">Sent</option>
+              <option value="Paid">Paid</option>
+              <option value="Overdue">Overdue</option>
+            </select>
+          </FilterField>
+          <FilterField label="Project status">
+            <select
+              value={filterProjectStatus}
+              onChange={(e) => setFilterProjectStatus(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All project states</option>
+              <option value="Active">Active</option>
+              <option value="On Hold">On Hold</option>
+              <option value="Complete">Complete</option>
+              <option value="Archived">Archived</option>
+            </select>
+          </FilterField>
+          <FilterField label="Project type">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All types</option>
+              <option value="Water Mitigation">Water Mitigation</option>
+              <option value="Pack-out">Pack-out</option>
+              <option value="Mold Remediation">Mold Remediation</option>
+            </select>
+          </FilterField>
+          <FilterField label="Collections">
+            <select
+              value={filterCollections}
+              onChange={(e) => setFilterCollections(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All collections</option>
+              <option value="needs-attention">Needs attention</option>
+              <option value="upcoming">Upcoming follow-up</option>
+              <option value="paid">Collected</option>
+            </select>
+          </FilterField>
+        </div>
+      </section>
 
-        {filtered.length === 0 && (
-          <div className="py-12 text-center text-muted">
-            {search || filterStatus !== 'all' ? 'No projects match your filters' : 'No projects found'}
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Claims table</p>
+            <h3 className="mt-2 text-xl font-semibold text-slate-950">{filtered.length} matching projects</h3>
+          </div>
+          <Link to="/reports" className="text-sm font-semibold text-primary hover:text-primary-hover">
+            Open reports
+          </Link>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="px-6 py-16 text-center text-sm text-slate-500">
+            {search || filterStatus !== 'all' || filterProjectStatus !== 'all' || filterType !== 'all' || filterCollections !== 'all'
+              ? 'No projects match the current filters.'
+              : 'No projects found.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="py-3.5 pl-6 pr-3 font-semibold text-slate-900">Client</th>
+                  <th className="px-3 py-3.5 font-semibold text-slate-900">Type</th>
+                  <th className="px-3 py-3.5 font-semibold text-slate-900">Financials</th>
+                  <th className="px-3 py-3.5 font-semibold text-slate-900">Documents</th>
+                  <th className="px-3 py-3.5 font-semibold text-slate-900">Collections</th>
+                  <th className="px-3 py-3.5 font-semibold text-slate-900">Project state</th>
+                  <th className="py-3.5 pl-3 pr-6 text-right font-semibold text-slate-900">Open</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {filtered.map((project) => (
+                  <tr key={project.id} className="hover:bg-slate-50">
+                    <td className="py-4 pl-6 pr-3">
+                      <div className="flex items-start gap-4">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary">
+                          {getInitials(project.clientName)}
+                        </div>
+                        <div className="min-w-0">
+                          <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
+                            {project.clientName}
+                          </Link>
+                          <p className="mt-1 truncate text-sm text-slate-600">
+                            {project.projectName || 'Untitled project'}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {project.claimNumber || 'No claim #'} · {project.carrier || 'Carrier not set'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="space-y-2">
+                        {project.projectType ? (
+                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${typeClasses(project.projectType)}`}>
+                            {project.projectType}
+                          </span>
+                        ) : (
+                          <span className="text-sm text-slate-400">Unassigned</span>
+                        )}
+                        <p className="text-xs text-slate-500">XA {project.xactimateNumber || '—'}</p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="space-y-2">
+                        <p className="font-medium tabular-nums text-slate-900">
+                          {project.amount ? `$${project.amount.toLocaleString()}` : '—'}
+                        </p>
+                        <StatusPill value={project.invoiceStatus} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="space-y-2">
+                        <StatusPill value={project.contractStatus} />
+                        <StatusPill value={project.cocStatus} />
+                      </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <div className="space-y-1">
+                        <p className={`font-semibold ${dateTone(project.nextFollowUpDate ?? project.dueDate, project.invoiceStatus, today)}`}>
+                          {formatDate(project.nextFollowUpDate ?? project.dueDate)}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Due {formatDate(project.dueDate)}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-3 py-4">
+                      <StatusPill value={project.projectStatus} />
+                    </td>
+                    <td className="py-4 pl-3 pr-6 text-right">
+                      <Link
+                        to={`/projects/${project.id}`}
+                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
+      </section>
 
       <CreateProjectModal
         open={showCreate}
@@ -255,9 +308,28 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
   )
 }
 
+function ToplineStat({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+      <p className="mt-2 text-sm text-slate-600">{detail}</p>
+    </div>
+  )
+}
+
+function FilterField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">{label}</span>
+      {children}
+    </label>
+  )
+}
+
 function formatDate(date: string | null) {
   if (!date) {
-    return '\u2014'
+    return '—'
   }
 
   return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
@@ -266,19 +338,43 @@ function formatDate(date: string | null) {
   })
 }
 
-function followUpTone(project: Project, today: string) {
-  const nextFollowUpDate = project.nextFollowUpDate
-  if (!nextFollowUpDate || project.invoiceStatus === 'Paid') {
-    return 'text-muted'
+function dateTone(date: string | null, invoiceStatus: Project['invoiceStatus'], today: string) {
+  if (!date || invoiceStatus === 'Paid') {
+    return 'text-slate-500'
   }
 
-  if (nextFollowUpDate < today) {
-    return 'font-semibold text-red-700'
+  if (date < today) {
+    return 'text-rose-700'
   }
 
-  if (nextFollowUpDate === today) {
-    return 'font-semibold text-amber-700'
+  if (date === today) {
+    return 'text-amber-700'
   }
 
-  return 'text-muted'
+  return 'text-slate-900'
+}
+
+function getInitials(value: string) {
+  return value
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((token) => token[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+function typeClasses(projectType: string) {
+  if (projectType === 'Water Mitigation') {
+    return 'bg-sky-100 text-sky-700'
+  }
+
+  if (projectType === 'Pack-out') {
+    return 'bg-violet-100 text-violet-700'
+  }
+
+  if (projectType === 'Mold Remediation') {
+    return 'bg-rose-100 text-rose-700'
+  }
+
+  return 'bg-slate-100 text-slate-700'
 }
