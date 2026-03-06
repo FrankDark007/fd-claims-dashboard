@@ -1,4 +1,5 @@
 import { createInvoiceEvent, listInvoiceEvents } from './_shared/project-store'
+import { getUserField } from './_shared/auth'
 
 interface Env {
   FD_CLAIMS_DB: D1Database
@@ -32,7 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       amount: body.amount,
       notes: body.notes,
       recipient: body.recipient,
-      createdBy: context.request.headers.get('X-User-Display') || 'Unknown',
+      createdBy: getUserField(context, 'displayName') || 'Unknown',
       eventDate: body.date,
     })
 

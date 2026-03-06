@@ -1,4 +1,5 @@
 import { createProjectCommunication, getProjectById, listProjectCommunications } from '../../_shared/project-store'
+import { getUserField } from '../../_shared/auth'
 import type { ProjectCommunicationWriteInput } from '../../../../src/shared/projects'
 
 interface Env {
@@ -38,7 +39,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const communication = await createProjectCommunication(context.env.FD_CLAIMS_DB, {
       projectId,
       ...body,
-      createdBy: context.request.headers.get('X-User-Display') || 'Unknown',
+      createdBy: getUserField(context, 'displayName') || 'Unknown',
     })
 
     return Response.json({ communication }, { status: 201 })

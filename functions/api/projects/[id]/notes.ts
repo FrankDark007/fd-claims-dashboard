@@ -1,4 +1,5 @@
 import { createProjectNote, getProjectById, listProjectNotes } from '../../_shared/project-store'
+import { getUserField } from '../../_shared/auth'
 
 interface Env {
   FD_CLAIMS_DB: D1Database
@@ -35,7 +36,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       projectId,
       body: body.body,
       pinned: body.pinned,
-      createdBy: context.request.headers.get('X-User-Display') || 'Unknown',
+      createdBy: getUserField(context, 'displayName') || 'Unknown',
     })
 
     return Response.json({ note }, { status: 201 })

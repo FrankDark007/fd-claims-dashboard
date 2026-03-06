@@ -1,5 +1,6 @@
 import { createProjectFile, deleteProjectFile, getProjectById, getProjectFileById, listProjectFiles } from '../../_shared/project-store'
 import { normalizeFileCategory } from '../../../../src/shared/projects'
+import { getUserField } from '../../_shared/auth'
 
 interface Env {
   FD_CLAIMS_DB: D1Database
@@ -77,7 +78,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       projectId,
       category: category,
       originalName: file.name,
-      uploadedBy: context.request.headers.get('X-User-Display') || 'Unknown',
+      uploadedBy: getUserField(context, 'displayName') || 'Unknown',
     },
   })
 
@@ -89,7 +90,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     category,
     sizeBytes: file.size,
     mimeType: file.type || 'application/octet-stream',
-    uploadedBy: context.request.headers.get('X-User-Display') || 'Unknown',
+    uploadedBy: getUserField(context, 'displayName') || 'Unknown',
   })
 
   return Response.json({ file: newFile }, { status: 201 })

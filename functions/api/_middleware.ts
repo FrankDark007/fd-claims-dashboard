@@ -30,7 +30,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const session = JSON.parse(sessionJson)
 
-  // Attach user info to request via header for downstream functions
+  // Pass user info via context.data (request replacement doesn't propagate in Pages Functions)
+  context.data = context.data || {}
+  context.data.user = {
+    userId: session.userId,
+    username: session.username,
+    displayName: session.displayName,
+    role: session.role,
+    email: session.email || '',
+  }
+
+  // Also set headers on a new request for backward compat with direct header reads
   const headers = new Headers(context.request.headers)
   headers.set('X-User-Id', session.userId)
   headers.set('X-User-Name', session.username)
@@ -38,7 +48,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   headers.set('X-User-Role', session.role)
   headers.set('X-User-Email', session.email || '')
 
-  // Create new request with user headers
   const newRequest = new Request(context.request.url, {
     method: context.request.method,
     headers,
@@ -47,7 +56,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       : context.request.body,
   })
 
-  // Replace the request in context
   context.request = newRequest
 
   return context.next()

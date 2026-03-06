@@ -1,4 +1,5 @@
 import { getProjectFileById } from '../../_shared/project-store'
+import { getUserField } from '../../_shared/auth'
 
 interface ShareToken {
   token: string
@@ -52,7 +53,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     mimeType: file.mimeType,
     createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
-    createdBy: context.request.headers.get('X-User-Display') || 'Unknown',
+    createdBy: getUserField(context, 'displayName') || 'Unknown',
   }
 
   // Store in KV with TTL

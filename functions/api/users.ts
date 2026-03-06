@@ -1,3 +1,5 @@
+import { getUserField } from './_shared/auth'
+
 interface Env {
   FD_CLAIMS_USERS: KVNamespace
   AUTH_SECRET: string
@@ -38,13 +40,14 @@ async function hashPassword(password: string, salt: string): Promise<string> {
   return Array.from(new Uint8Array(bits)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
-function isAdmin(request: Request): boolean {
-  return request.headers.get('X-User-Role') === 'admin'
+function isAdmin(context: { data?: { user?: { role?: string } }; request: Request }): boolean {
+  if (context.data?.user?.role) return context.data.user.role === 'admin'
+  return context.request.headers.get('X-User-Role') === 'admin'
 }
 
 // GET /api/users — list all users (admin only)
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  if (!isAdmin(context.request)) {
+  if (!isAdmin(context)) {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
@@ -63,7 +66,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
 // POST /api/users — create user (admin only)
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  if (!isAdmin(context.request)) {
+  if (!isAdmin(context)) {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
@@ -114,7 +117,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
 // DELETE /api/users?username=xxx — remove user (admin only)
 export const onRequestDelete: PagesFunction<Env> = async (context) => {
-  if (!isAdmin(context.request)) {
+  if (!isAdmin(context)) {
     return Response.json({ error: 'Admin access required' }, { status: 403 })
   }
 
@@ -126,7 +129,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
   }
 
   // Prevent deleting yourself
-  const currentUser = context.request.headers.get('X-User-Name')
+  const currentUser = getUserField(context, 'username')
   if (username === currentUser) {
     return Response.json({ error: 'Cannot delete your own account' }, { status: 400 })
   }
