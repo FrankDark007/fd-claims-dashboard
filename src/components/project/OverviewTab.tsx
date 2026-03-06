@@ -78,6 +78,7 @@ export default function OverviewTab({ project }: OverviewTabProps) {
           </Row>
           <Row label="Invoice Sent" value={project.invoiceSentDate ? new Date(project.invoiceSentDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
           <Row label="Due Date" value={project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <Row label="Next Follow-up" value={project.nextFollowUpDate ? new Date(project.nextFollowUpDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
           <Row label="Payment Received" value={project.paymentReceivedDate ? new Date(project.paymentReceivedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
           <Row label="Created" value={project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
           <Row label="Status">

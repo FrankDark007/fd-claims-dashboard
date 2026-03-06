@@ -140,6 +140,11 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
             <div className="mt-2">
               <StatusPill value={project.invoiceStatus} size="md" />
             </div>
+            {(project.nextFollowUpDate || project.dueDate) && project.invoiceStatus !== 'Paid' && (
+              <div className="mt-2 flex items-center text-sm text-secondary">
+                Follow-up {formatDate(project.nextFollowUpDate ?? project.dueDate)}
+              </div>
+            )}
           </div>
         </div>
         <div className="mt-5 flex lg:ml-4 lg:mt-0">
@@ -278,4 +283,15 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
       </div>
     </div>
   )
+}
+
+function formatDate(date: string | null) {
+  if (!date) {
+    return '—'
+  }
+
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
 }
