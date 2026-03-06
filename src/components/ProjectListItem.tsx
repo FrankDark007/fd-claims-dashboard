@@ -40,6 +40,7 @@ function getProgress(project: Project): { percent: number; label: string } {
 
 export default function ProjectListItem({ project }: ProjectListItemProps) {
   const progress = getProgress(project)
+  const nextFollowUpDate = project.nextFollowUpDate ?? project.dueDate
 
   return (
     <Link
@@ -73,6 +74,11 @@ export default function ProjectListItem({ project }: ProjectListItemProps) {
             {project.createdAt && (
               <span>
                 {new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              </span>
+            )}
+            {nextFollowUpDate && project.invoiceStatus !== 'Paid' && (
+              <span className={nextFollowUpDate < new Date().toISOString().slice(0, 10) ? 'font-semibold text-red-700' : ''}>
+                Follow-up {new Date(`${nextFollowUpDate}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
               </span>
             )}
           </div>
