@@ -35,9 +35,21 @@ const tabs = [
 
 export default function ProjectDetailPage({ projects, token }: ProjectDetailPageProps) {
   const { id } = useParams<{ id: string }>()
-  const { project: hydratedProject, loading: projectLoading } = useProject(id, token)
+  const {
+    project: hydratedProject,
+    loading: projectLoading,
+    saveProject,
+    refetch: refetchProject,
+  } = useProject(id, token)
   const project = hydratedProject ?? projects.find((candidate) => candidate.id === id)
-  const { data, loading: dataLoading, refetch } = useProjectData(id, token)
+  const {
+    data,
+    loading: dataLoading,
+    refetch,
+    addInvoiceEvent,
+    updateInvoiceEvent,
+    removeInvoiceEvent,
+  } = useProjectData(id, token)
   const {
     notes,
     loading: notesLoading,
@@ -46,6 +58,26 @@ export default function ProjectDetailPage({ projects, token }: ProjectDetailPage
     removeNote,
   } = useProjectNotes(id, token)
   const [activeTab, setActiveTab] = useState('overview')
+
+  const handleProjectSave = async (input: Parameters<typeof saveProject>[0]) => {
+    await saveProject(input)
+    await refetch()
+  }
+
+  const handleAddInvoiceEvent = async (input: Parameters<typeof addInvoiceEvent>[0]) => {
+    await addInvoiceEvent(input)
+    await refetchProject()
+  }
+
+  const handleUpdateInvoiceEvent = async (eventId: string, input: Parameters<typeof updateInvoiceEvent>[1]) => {
+    await updateInvoiceEvent(eventId, input)
+    await refetchProject()
+  }
+
+  const handleDeleteInvoiceEvent = async (eventId: string) => {
+    await removeInvoiceEvent(eventId)
+    await refetchProject()
+  }
 
   if (!project && projectLoading) {
     return (
@@ -213,9 +245,25 @@ export default function ProjectDetailPage({ projects, token }: ProjectDetailPage
       {/* Tab Content */}
       <div>
         {activeTab === 'overview' && <OverviewTab project={project} />}
-        {activeTab === 'financials' && <FinancialsTab project={project} invoiceEvents={data.invoiceEvents} />}
+        {activeTab === 'financials' && (
+          <FinancialsTab
+            project={project}
+            invoiceEvents={data.invoiceEvents}
+            onSaveProject={handleProjectSave}
+            onCreateInvoiceEvent={handleAddInvoiceEvent}
+          />
+        )}
         {activeTab === 'files' && <FilesTab files={data.files} loading={dataLoading} projectId={id!} token={token} onRefresh={refetch} />}
-        {activeTab === 'timeline' && <TimelineTab project={project} invoiceEvents={data.invoiceEvents} notes={notes} />}
+        {activeTab === 'timeline' && (
+          <TimelineTab
+            project={project}
+            invoiceEvents={data.invoiceEvents}
+            notes={notes}
+            onCreateInvoiceEvent={handleAddInvoiceEvent}
+            onUpdateInvoiceEvent={handleUpdateInvoiceEvent}
+            onDeleteInvoiceEvent={handleDeleteInvoiceEvent}
+          />
+        )}
         {activeTab === 'notes' && (
           <NotesTab
             notes={notes}

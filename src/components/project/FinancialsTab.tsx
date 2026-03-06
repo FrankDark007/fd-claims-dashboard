@@ -1,12 +1,52 @@
-import type { ReactNode } from 'react'
-import { BanknotesIcon, BellAlertIcon, CalendarDaysIcon, UserCircleIcon } from '@heroicons/react/24/outline'
-import StatusPill from '../StatusPill'
-import type { Project } from '../../types/claim'
-import type { InvoiceEvent } from '../../hooks/useProject'
+import { type ReactNode, useEffect, useState } from 'react'
+import {
+  BanknotesIcon,
+  BellAlertIcon,
+  CalendarDaysIcon,
+  PhoneIcon,
+  UserCircleIcon,
+} from '@heroicons/react/24/outline'
+import {
+  FINAL_INVOICE_STATUSES,
+  INVOICE_STATUSES,
+  type InvoiceEvent,
+  type Project,
+  type ProjectWriteInput,
+} from '../../shared/projects'
 
 interface FinancialsTabProps {
   project: Project
   invoiceEvents: InvoiceEvent[]
+  onSaveProject: (input: ProjectWriteInput) => Promise<unknown>
+  onCreateInvoiceEvent: (input: {
+    type: 'sent' | 'reminder' | 'paid' | 'disputed'
+    date: string
+    amount: number
+    notes?: string
+    recipient?: string
+  }) => Promise<unknown>
+}
+
+interface FinancialFormState {
+  invoiceId: string
+  amount: string
+  invoiceStatus: Project['invoiceStatus']
+  finalInvoiceStatus: Project['finalInvoiceStatus']
+  invoiceSentDate: string
+  dueDate: string
+  nextFollowUpDate: string
+  paymentReceivedDate: string
+  claimNumber: string
+  carrier: string
+}
+
+interface ContactFormState {
+  projectManagerName: string
+  pmEmail: string
+  pmPhone: string
+  adjusterName: string
+  adjusterEmail: string
+  adjusterPhone: string
 }
 
 type FollowUpState = {
@@ -15,47 +55,246 @@ type FollowUpState = {
   detail: string
 }
 
-export default function FinancialsTab({ project, invoiceEvents }: FinancialsTabProps) {
-  const followUp = getFollowUpState(project)
+export default function FinancialsTab({
+  project,
+  invoiceEvents,
+  onSaveProject,
+  onCreateInvoiceEvent,
+}: FinancialsTabProps) {
+  const [financialForm, setFinancialForm] = useState<FinancialFormState>(buildFinancialForm(project))
+  const [contactForm, setContactForm] = useState<ContactFormState>(buildContactForm(project))
+  const [savingSection, setSavingSection] = useState<'financials' | 'contacts' | 'actions' | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    setFinancialForm(buildFinancialForm(project))
+    setContactForm(buildContactForm(project))
+  }, [project])
+
+  const lastReminder = invoiceEvents.find((event) => event.type === 'reminder') ?? null
+  const followUp = getFollowUpState(project, lastReminder?.eventDate ?? null)
+
+  const saveFinancials = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSavingSection('financials')
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      await onSaveProject({
+        invoiceId: parseNumberField(financialForm.invoiceId),
+        amount: parseNumberField(financialForm.amount),
+        invoiceStatus: financialForm.invoiceStatus,
+        finalInvoiceStatus: financialForm.finalInvoiceStatus,
+        invoiceSentDate: parseDateField(financialForm.invoiceSentDate),
+        dueDate: parseDateField(financialForm.dueDate),
+        nextFollowUpDate: parseDateField(financialForm.nextFollowUpDate),
+        paymentReceivedDate: parseDateField(financialForm.paymentReceivedDate),
+        claimNumber: financialForm.claimNumber,
+        carrier: financialForm.carrier,
+      })
+      setSuccessMessage('Financial details saved.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save financial details')
+    } finally {
+      setSavingSection(null)
+    }
+  }
+
+  const saveContacts = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setSavingSection('contacts')
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      await onSaveProject(contactForm)
+      setSuccessMessage('Contacts saved.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save contacts')
+    } finally {
+      setSavingSection(null)
+    }
+  }
+
+  const updateFollowUpDate = async (nextFollowUpDate: string | null, successLabel: string) => {
+    setSavingSection('actions')
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      await onSaveProject({ nextFollowUpDate })
+      setSuccessMessage(successLabel)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to update follow-up date')
+    } finally {
+      setSavingSection(null)
+    }
+  }
+
+  const logReminder = async () => {
+    setSavingSection('actions')
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      await onCreateInvoiceEvent({
+        type: 'reminder',
+        date: new Date().toISOString().slice(0, 10),
+        amount: project.amount ?? 0,
+        recipient: project.adjusterEmail || project.adjusterName || project.pmEmail || project.projectManagerName,
+        notes: 'Collections follow-up logged from the project detail view.',
+      })
+      setSuccessMessage('Reminder logged and next follow-up moved out seven days.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to log reminder')
+    } finally {
+      setSavingSection(null)
+    }
+  }
+
+  const markPaid = async () => {
+    setSavingSection('actions')
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      await onCreateInvoiceEvent({
+        type: 'paid',
+        date: new Date().toISOString().slice(0, 10),
+        amount: project.amount ?? 0,
+        recipient: project.clientName,
+        notes: 'Payment recorded from the project detail view.',
+      })
+      setSuccessMessage('Payment recorded.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to record payment')
+    } finally {
+      setSavingSection(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div className={`rounded-2xl border px-6 py-5 shadow-sm ${followUp.tone}`}>
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] opacity-70">Collections</p>
             <h3 className="mt-2 text-xl font-semibold text-foreground">{followUp.label}</h3>
             <p className="mt-1 text-sm text-secondary">{followUp.detail}</p>
           </div>
-          <BellAlertIcon className="size-6 shrink-0 opacity-70" />
+          <div className="grid gap-2 sm:grid-cols-2 xl:min-w-[23rem]">
+            <ActionButton
+              label="Follow Up Today"
+              onClick={() => void updateFollowUpDate(new Date().toISOString().slice(0, 10), 'Next follow-up set for today.')}
+              disabled={savingSection === 'actions'}
+            />
+            <ActionButton
+              label="Push 7 Days"
+              onClick={() => void updateFollowUpDate(addDaysFromToday(7), 'Next follow-up pushed out seven days.')}
+              disabled={savingSection === 'actions'}
+            />
+            <ActionButton
+              label="Log Reminder"
+              onClick={() => void logReminder()}
+              disabled={savingSection === 'actions'}
+            />
+            <ActionButton
+              label="Mark Paid"
+              onClick={() => void markPaid()}
+              disabled={savingSection === 'actions' || project.invoiceStatus === 'Paid'}
+            />
+          </div>
         </div>
+        {(error || successMessage) && (
+          <p className={`mt-4 text-sm ${error ? 'text-red-700' : 'text-green-700'}`}>
+            {error ?? successMessage}
+          </p>
+        )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
-        <section className="rounded-2xl bg-white p-6 shadow">
+      <div className="grid gap-6 xl:grid-cols-[1.45fr,1fr]">
+        <form onSubmit={saveFinancials} className="rounded-2xl bg-white p-6 shadow">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <BanknotesIcon className="size-5 text-primary" />
             Invoice Summary
           </div>
+
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <Metric label="Amount" value={project.amount ? `$${project.amount.toLocaleString()}` : '—'} />
-            <Metric label="Invoice Status" value={<StatusPill value={project.invoiceStatus} size="md" />} />
-            <Metric label="Invoice Sent" value={formatDate(project.invoiceSentDate)} />
-            <Metric label="Due Date" value={formatDate(project.dueDate)} />
-            <Metric label="Payment Received" value={formatDate(project.paymentReceivedDate)} />
-            <Metric label="Final Invoice" value={<StatusPill value={project.finalInvoiceStatus} size="md" />} />
+            <InputField
+              label="Invoice ID"
+              value={financialForm.invoiceId}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, invoiceId: value }))}
+              inputMode="numeric"
+            />
+            <InputField
+              label="Amount"
+              value={financialForm.amount}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, amount: value }))}
+              inputMode="decimal"
+              placeholder="0.00"
+            />
+            <SelectField
+              label="Invoice Status"
+              value={financialForm.invoiceStatus ?? ''}
+              onChange={(value) => setFinancialForm((current) => ({
+                ...current,
+                invoiceStatus: value === '' ? null : value as Project['invoiceStatus'],
+              }))}
+              options={INVOICE_STATUSES}
+            />
+            <SelectField
+              label="Final Invoice"
+              value={financialForm.finalInvoiceStatus ?? ''}
+              onChange={(value) => setFinancialForm((current) => ({
+                ...current,
+                finalInvoiceStatus: value === '' ? null : value as Project['finalInvoiceStatus'],
+              }))}
+              options={FINAL_INVOICE_STATUSES}
+            />
+            <DateField
+              label="Invoice Sent"
+              value={financialForm.invoiceSentDate}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, invoiceSentDate: value }))}
+            />
+            <DateField
+              label="Due Date"
+              value={financialForm.dueDate}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, dueDate: value }))}
+            />
+            <DateField
+              label="Next Follow-up"
+              value={financialForm.nextFollowUpDate}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, nextFollowUpDate: value }))}
+            />
+            <DateField
+              label="Payment Received"
+              value={financialForm.paymentReceivedDate}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, paymentReceivedDate: value }))}
+            />
+            <InputField
+              label="Claim Number"
+              value={financialForm.claimNumber}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, claimNumber: value }))}
+            />
+            <InputField
+              label="Carrier"
+              value={financialForm.carrier}
+              onChange={(value) => setFinancialForm((current) => ({ ...current, carrier: value }))}
+            />
           </div>
 
           <div className="mt-6 border-t border-gray-100 pt-5">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
               <CalendarDaysIcon className="size-5 text-primary" />
-              Invoice Activity
+              Recent Activity
             </div>
             {invoiceEvents.length === 0 ? (
               <p className="mt-3 text-sm text-secondary">No invoice events recorded yet.</p>
             ) : (
               <ul className="mt-4 space-y-3">
-                {invoiceEvents.slice(0, 6).map((event) => (
+                {invoiceEvents.slice(0, 4).map((event) => (
                   <li key={event.id} className="flex items-start justify-between gap-4 rounded-xl border border-gray-100 px-4 py-3">
                     <div>
                       <div className="flex items-center gap-2">
@@ -78,28 +317,135 @@ export default function FinancialsTab({ project, invoiceEvents }: FinancialsTabP
               </ul>
             )}
           </div>
-        </section>
 
-        <section className="space-y-6">
-          <ContactCard
-            title="Project Manager"
-            name={project.projectManagerName}
-            email={project.pmEmail}
-            phone={project.pmPhone}
-          />
-          <ContactCard
-            title="Adjuster"
-            name={project.adjusterName}
-            email={project.adjusterEmail}
-            phone={project.adjusterPhone}
-          />
-        </section>
+          <div className="mt-6 flex justify-end">
+            <button
+              type="submit"
+              disabled={savingSection === 'financials'}
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50"
+            >
+              {savingSection === 'financials' ? 'Saving...' : 'Save Financials'}
+            </button>
+          </div>
+        </form>
+
+        <div className="space-y-6">
+          <div className="rounded-2xl bg-white p-6 shadow">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <BellAlertIcon className="size-5 text-primary" />
+              Collections Snapshot
+            </div>
+            <div className="mt-4 space-y-3">
+              <Metric label="Outstanding" value={project.invoiceStatus === 'Paid' ? '$0' : formatCurrency(project.amount)} />
+              <Metric label="Due Date" value={formatDate(project.dueDate)} />
+              <Metric label="Next Follow-up" value={formatDate(project.nextFollowUpDate)} />
+              <Metric label="Last Reminder" value={formatDate(lastReminder?.eventDate ?? null)} />
+            </div>
+          </div>
+
+          <form onSubmit={saveContacts} className="rounded-2xl bg-white p-6 shadow">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <UserCircleIcon className="size-5 text-primary" />
+              Contacts
+            </div>
+
+            <div className="mt-5 space-y-6">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <PhoneIcon className="size-4 text-primary" />
+                  Project Manager
+                </div>
+                <div className="mt-3 grid gap-4">
+                  <InputField
+                    label="Name"
+                    value={contactForm.projectManagerName}
+                    onChange={(value) => setContactForm((current) => ({ ...current, projectManagerName: value }))}
+                  />
+                  <InputField
+                    label="Email"
+                    value={contactForm.pmEmail}
+                    onChange={(value) => setContactForm((current) => ({ ...current, pmEmail: value }))}
+                    type="email"
+                  />
+                  <InputField
+                    label="Phone"
+                    value={contactForm.pmPhone}
+                    onChange={(value) => setContactForm((current) => ({ ...current, pmPhone: value }))}
+                    type="tel"
+                  />
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-5">
+                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                  <PhoneIcon className="size-4 text-primary" />
+                  Adjuster
+                </div>
+                <div className="mt-3 grid gap-4">
+                  <InputField
+                    label="Name"
+                    value={contactForm.adjusterName}
+                    onChange={(value) => setContactForm((current) => ({ ...current, adjusterName: value }))}
+                  />
+                  <InputField
+                    label="Email"
+                    value={contactForm.adjusterEmail}
+                    onChange={(value) => setContactForm((current) => ({ ...current, adjusterEmail: value }))}
+                    type="email"
+                  />
+                  <InputField
+                    label="Phone"
+                    value={contactForm.adjusterPhone}
+                    onChange={(value) => setContactForm((current) => ({ ...current, adjusterPhone: value }))}
+                    type="tel"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="submit"
+                disabled={savingSection === 'contacts'}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50"
+              >
+                {savingSection === 'contacts' ? 'Saving...' : 'Save Contacts'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )
 }
 
-function getFollowUpState(project: Project): FollowUpState {
+function buildFinancialForm(project: Project): FinancialFormState {
+  return {
+    invoiceId: project.invoiceId?.toString() ?? '',
+    amount: project.amount?.toString() ?? '',
+    invoiceStatus: project.invoiceStatus,
+    finalInvoiceStatus: project.finalInvoiceStatus,
+    invoiceSentDate: project.invoiceSentDate ?? '',
+    dueDate: project.dueDate ?? '',
+    nextFollowUpDate: project.nextFollowUpDate ?? '',
+    paymentReceivedDate: project.paymentReceivedDate ?? '',
+    claimNumber: project.claimNumber,
+    carrier: project.carrier,
+  }
+}
+
+function buildContactForm(project: Project): ContactFormState {
+  return {
+    projectManagerName: project.projectManagerName,
+    pmEmail: project.pmEmail,
+    pmPhone: project.pmPhone,
+    adjusterName: project.adjusterName,
+    adjusterEmail: project.adjusterEmail,
+    adjusterPhone: project.adjusterPhone,
+  }
+}
+
+function getFollowUpState(project: Project, lastReminderDate: string | null): FollowUpState {
   if (project.invoiceStatus === 'Paid' || project.paymentReceivedDate) {
     return {
       tone: 'border-green-200 bg-green-50',
@@ -110,79 +456,151 @@ function getFollowUpState(project: Project): FollowUpState {
     }
   }
 
-  if (project.invoiceStatus === 'Draft') {
+  if (!project.invoiceSentDate) {
     return {
       tone: 'border-gray-200 bg-gray-50',
       label: 'Invoice still in draft',
-      detail: 'Collections follow-up starts after the invoice is sent.',
+      detail: 'Set the invoice sent date to start aging and follow-up scheduling.',
     }
   }
 
-  if (!project.dueDate && project.invoiceSentDate) {
+  const nextFollowUpDate = project.nextFollowUpDate ?? project.dueDate
+  if (!nextFollowUpDate) {
     return {
       tone: 'border-yellow-200 bg-yellow-50',
-      label: 'Due date missing',
-      detail: `Invoice was sent on ${formatDate(project.invoiceSentDate)} but no due date is set.`,
-    }
-  }
-
-  if (!project.invoiceSentDate && !project.dueDate) {
-    return {
-      tone: 'border-gray-200 bg-gray-50',
-      label: 'No follow-up date yet',
-      detail: 'Set an invoice sent date to establish the default 30-day due date.',
-    }
-  }
-
-  const dueDate = project.dueDate ?? project.invoiceSentDate
-  if (!dueDate) {
-    return {
-      tone: 'border-gray-200 bg-gray-50',
-      label: 'No follow-up date yet',
-      detail: 'This project does not have a due date.',
+      label: 'No follow-up scheduled',
+      detail: 'This project has an invoice sent date but no collections follow-up date.',
     }
   }
 
   const today = new Date().toISOString().slice(0, 10)
-  const days = Math.floor((new Date(`${dueDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000)
+  const daysUntilFollowUp = dateDiffInDays(nextFollowUpDate, today)
+  const reminderDetail = lastReminderDate ? ` Last reminder: ${formatDate(lastReminderDate)}.` : ''
 
-  if (days > 0) {
+  if (daysUntilFollowUp > 0) {
     return {
       tone: 'border-blue-200 bg-blue-50',
-      label: `${days} day${days === 1 ? '' : 's'} until follow-up`,
-      detail: `Due on ${formatDate(dueDate)}.`,
+      label: `${daysUntilFollowUp} day${daysUntilFollowUp === 1 ? '' : 's'} until next follow-up`,
+      detail: `Next follow-up is scheduled for ${formatDate(nextFollowUpDate)}.${reminderDetail}`,
     }
   }
 
-  if (days === 0) {
+  if (daysUntilFollowUp === 0) {
     return {
       tone: 'border-orange-200 bg-orange-50',
-      label: 'Due today',
-      detail: 'This invoice is due today and should be followed up immediately.',
+      label: 'Follow up today',
+      detail: `Collections touchpoint is due today.${reminderDetail}`,
     }
   }
 
-  const overdueDays = Math.abs(days)
+  const overdueDays = Math.abs(daysUntilFollowUp)
   return {
     tone: 'border-red-200 bg-red-50',
-    label: `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`,
-    detail: `Invoice was due on ${formatDate(dueDate)}.`,
+    label: `${overdueDays} day${overdueDays === 1 ? '' : 's'} past follow-up`,
+    detail: `Next follow-up was scheduled for ${formatDate(nextFollowUpDate)}.${reminderDetail}`,
   }
 }
 
-function ContactCard({ title, name, email, phone }: { title: string; name: string; email: string; phone: string }) {
+function InputField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  inputMode,
+  placeholder,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  type?: string
+  inputMode?: React.InputHTMLAttributes<HTMLInputElement>['inputMode']
+  placeholder?: string
+}) {
   return (
-    <div className="rounded-2xl bg-white p-6 shadow">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <UserCircleIcon className="size-5 text-primary" />
-        {title}
-      </div>
-      <div className="mt-4 space-y-3">
-        <Metric label="Name" value={name || '—'} />
-        <Metric label="Email" value={email || '—'} />
-        <Metric label="Phone" value={phone || '—'} />
-      </div>
-    </div>
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{label}</span>
+      <input
+        type={type}
+        value={value}
+        inputMode={inputMode}
+        placeholder={placeholder}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 block w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </label>
+  )
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: readonly string[]
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 block w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      >
+        <option value="">Unset</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function DateField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label className="block">
+      <span className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">{label}</span>
+      <input
+        type="date"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-2 block w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+    </label>
+  )
+}
+
+function ActionButton({
+  label,
+  onClick,
+  disabled,
+}: {
+  label: string
+  onClick: () => void
+  disabled: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded-xl border border-white/70 bg-white/85 px-4 py-3 text-sm font-semibold text-foreground shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {label}
+    </button>
   )
 }
 
@@ -195,16 +613,49 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
+function parseDateField(value: string): string | null {
+  return value.trim() === '' ? null : value
+}
+
+function parseNumberField(value: string): number | null {
+  if (value.trim() === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 function formatDate(date: string | null) {
   if (!date) {
     return '—'
   }
 
-  return new Date(date).toLocaleDateString('en-US', {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
   })
+}
+
+function formatCurrency(amount: number | null) {
+  if (amount == null) {
+    return '—'
+  }
+
+  return `$${amount.toLocaleString()}`
+}
+
+function dateDiffInDays(targetDate: string, startDate: string) {
+  return Math.floor(
+    (new Date(`${targetDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86400000
+  )
+}
+
+function addDaysFromToday(days: number) {
+  const today = new Date()
+  today.setDate(today.getDate() + days)
+  return today.toISOString().slice(0, 10)
 }
 
 function eventLabel(type: InvoiceEvent['type']) {

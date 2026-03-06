@@ -61,6 +61,7 @@ export interface Project {
   adjusterPhone: string
   invoiceSentDate: string | null
   dueDate: string | null
+  nextFollowUpDate: string | null
   paymentReceivedDate: string | null
   notes: string
   done: boolean
@@ -161,6 +162,7 @@ export interface ProjectWriteInput {
   adjusterPhone?: string
   invoiceSentDate?: string | null
   dueDate?: string | null
+  nextFollowUpDate?: string | null
   paymentReceivedDate?: string | null
   notes?: string
   done?: boolean

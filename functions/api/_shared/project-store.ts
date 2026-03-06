@@ -1,4 +1,5 @@
 import {
+  addDays,
   computeInvoiceStatus,
   defaultDueDate,
   normalizeBoolean,
@@ -53,6 +54,7 @@ interface ProjectRecord {
   adjusterPhone: string
   invoiceSentDate: string | null
   dueDate: string | null
+  nextFollowUpDate: string | null
   paymentReceivedDate: string | null
   notes: string
   done: number
@@ -124,6 +126,7 @@ const PROJECT_SELECT = `
     adjuster_phone AS adjusterPhone,
     invoice_sent_date AS invoiceSentDate,
     due_date AS dueDate,
+    next_follow_up_date AS nextFollowUpDate,
     payment_received_date AS paymentReceivedDate,
     notes,
     done,
@@ -206,6 +209,7 @@ function mapProjectRecord(record: ProjectRecord): Project {
     adjusterPhone: record.adjusterPhone ?? '',
     invoiceSentDate: record.invoiceSentDate,
     dueDate: record.dueDate,
+    nextFollowUpDate: record.nextFollowUpDate,
     paymentReceivedDate: record.paymentReceivedDate,
     notes: record.notes ?? '',
     done: normalizeBoolean(record.done),
@@ -272,12 +276,30 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     ? normalizeDateOnly(input.paymentReceivedDate)
     : existing?.paymentReceivedDate ?? null
 
+  let nextFollowUpDate = input.nextFollowUpDate !== undefined
+    ? normalizeDateOnly(input.nextFollowUpDate)
+    : existing?.nextFollowUpDate ?? null
+
   let invoiceStatus = input.invoiceStatus !== undefined
     ? normalizeInvoiceStatus(input.invoiceStatus)
     : normalizeInvoiceStatus(existing?.invoiceStatus) ?? 'Draft'
 
   if (paymentReceivedDate) {
     invoiceStatus = 'Paid'
+    nextFollowUpDate = null
+  }
+
+  if (!existing && !nextFollowUpDate && dueDate) {
+    nextFollowUpDate = dueDate
+  }
+
+  if (
+    input.invoiceSentDate !== undefined &&
+    input.nextFollowUpDate === undefined &&
+    !paymentReceivedDate &&
+    !existing?.nextFollowUpDate
+  ) {
+    nextFollowUpDate = dueDate
   }
 
   return {
@@ -316,6 +338,7 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     adjusterPhone: input.adjusterPhone !== undefined ? normalizeOptionalText(input.adjusterPhone) : existing?.adjusterPhone ?? '',
     invoiceSentDate,
     dueDate,
+    nextFollowUpDate,
     paymentReceivedDate,
     notes: input.notes !== undefined ? normalizeOptionalText(input.notes) : existing?.notes ?? '',
     done: input.done !== undefined ? (normalizeBoolean(input.done) ? 1 : 0) : existing?.done ?? 0,
@@ -336,9 +359,9 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
       amount, contract_status, coc_status, final_invoice_status, drylog_status, rewrite_status,
       matterport_status, company_cam_url, drive_folder_url, xactimate_number, claim_number,
       carrier, project_manager_name, pm_email, pm_phone, adjuster_name, adjuster_email,
-      adjuster_phone, invoice_sent_date, due_date, payment_received_date, notes, done,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      adjuster_phone, invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
+      notes, done, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     project.id,
     project.invoiceId,
@@ -367,6 +390,7 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
     project.adjusterPhone,
     project.invoiceSentDate,
     project.dueDate,
+    project.nextFollowUpDate,
     project.paymentReceivedDate,
     project.notes,
     project.done,
@@ -573,6 +597,53 @@ export async function listInvoiceEvents(db: D1Database, projectId?: string): Pro
   return (result.results ?? []).map(mapInvoiceEventRecord)
 }
 
+export async function getInvoiceEventById(
+  db: D1Database,
+  projectId: string,
+  eventId: string
+): Promise<InvoiceEvent | null> {
+  const record = await db.prepare(
+    `${INVOICE_EVENT_SELECT} WHERE project_id = ? AND id = ?`
+  ).bind(projectId, eventId).first<InvoiceEventRecord>()
+
+  return record ? mapInvoiceEventRecord(record) : null
+}
+
+async function syncProjectWithInvoiceEvent(db: D1Database, projectId: string, event: InvoiceEvent): Promise<void> {
+  const project = await getProjectRecord(db, projectId)
+  if (!project) {
+    return
+  }
+
+  const patch: ProjectWriteInput = {}
+
+  if (event.type === 'sent') {
+    patch.invoiceStatus = 'Sent'
+    patch.invoiceSentDate = event.eventDate
+    if (!project.dueDate) {
+      patch.dueDate = defaultDueDate(event.eventDate)
+    }
+    if (!project.nextFollowUpDate && !project.paymentReceivedDate) {
+      patch.nextFollowUpDate = defaultDueDate(event.eventDate)
+    }
+  }
+
+  if (event.type === 'reminder' && !project.paymentReceivedDate) {
+    patch.nextFollowUpDate = addDays(event.eventDate, 7)
+  }
+
+  if (event.type === 'paid') {
+    patch.invoiceStatus = 'Paid'
+    patch.paymentReceivedDate = event.eventDate
+    patch.nextFollowUpDate = null
+  }
+
+  if (Object.keys(patch).length > 0) {
+    const merged = normalizeProjectRecordInput(patch, project)
+    await insertOrReplaceProject(db, merged)
+  }
+}
+
 export async function createInvoiceEvent(
   db: D1Database,
   params: {
@@ -618,30 +689,63 @@ export async function createInvoiceEvent(
     event.eventDate
   ).run()
 
-  const project = await getProjectRecord(db, event.projectId)
-  if (project) {
-    const patch: ProjectWriteInput = {}
-
-    if (event.type === 'sent') {
-      patch.invoiceStatus = 'Sent'
-      patch.invoiceSentDate = event.eventDate
-      if (!project.dueDate) {
-        patch.dueDate = defaultDueDate(event.eventDate)
-      }
-    }
-
-    if (event.type === 'paid') {
-      patch.invoiceStatus = 'Paid'
-      patch.paymentReceivedDate = event.eventDate
-    }
-
-    if (patch.invoiceStatus || patch.invoiceSentDate || patch.paymentReceivedDate || patch.dueDate) {
-      const merged = normalizeProjectRecordInput(patch, project)
-      await insertOrReplaceProject(db, merged)
-    }
-  }
+  await syncProjectWithInvoiceEvent(db, event.projectId, event)
 
   return event
+}
+
+export async function updateInvoiceEvent(
+  db: D1Database,
+  params: {
+    projectId: string
+    eventId: string
+    type?: string
+    recipient?: string
+    amount?: number
+    notes?: string
+    eventDate?: string
+  }
+): Promise<InvoiceEvent | null> {
+  const existing = await getInvoiceEventById(db, params.projectId, params.eventId)
+  if (!existing) {
+    return null
+  }
+
+  const type = params.type !== undefined ? normalizeInvoiceEventType(params.type) : existing.type
+  if (!type) {
+    throw new Error('Invalid invoice event type')
+  }
+
+  const next: InvoiceEvent = {
+    id: existing.id,
+    projectId: existing.projectId,
+    type,
+    recipient: params.recipient !== undefined ? normalizeOptionalText(params.recipient) : existing.recipient,
+    amount: params.amount !== undefined ? normalizeNullableNumber(params.amount) ?? 0 : existing.amount,
+    notes: params.notes !== undefined ? normalizeOptionalText(params.notes) : existing.notes,
+    createdBy: existing.createdBy,
+    createdAt: existing.createdAt,
+    eventDate: params.eventDate !== undefined
+      ? normalizeDateOnly(params.eventDate) ?? existing.eventDate
+      : existing.eventDate,
+  }
+
+  await db.prepare(`
+    UPDATE invoice_events
+    SET type = ?, recipient = ?, amount = ?, notes = ?, event_date = ?
+    WHERE project_id = ? AND id = ?
+  `).bind(
+    next.type,
+    next.recipient,
+    next.amount,
+    next.notes,
+    next.eventDate,
+    params.projectId,
+    params.eventId
+  ).run()
+
+  await syncProjectWithInvoiceEvent(db, params.projectId, next)
+  return next
 }
 
 export async function deleteInvoiceEvent(db: D1Database, projectId: string, eventId: string): Promise<boolean> {
