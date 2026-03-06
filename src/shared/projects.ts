@@ -8,6 +8,9 @@ export const REWRITE_STATUSES = ['Not Started', 'In Progress', 'Review', 'Done']
 export const INVOICE_STATUSES = ['Draft', 'Sent', 'Paid', 'Overdue'] as const
 export const FILE_CATEGORIES = ['contracts', 'cocs', 'drylogs', 'invoices', 'photos', 'correspondence', 'other'] as const
 export const INVOICE_EVENT_TYPES = ['sent', 'reminder', 'paid', 'disputed'] as const
+export const COMMUNICATION_CHANNELS = ['email', 'phone', 'text', 'meeting'] as const
+export const COMMUNICATION_DIRECTIONS = ['inbound', 'outbound'] as const
+export const COMMUNICATION_STATUSES = ['planned', 'sent', 'received', 'replied', 'left_voicemail', 'no_response'] as const
 
 export type ProjectType = typeof PROJECT_TYPES[number]
 export type ProjectStatus = typeof PROJECT_STATUSES[number]
@@ -19,6 +22,9 @@ export type RewriteStatus = typeof REWRITE_STATUSES[number]
 export type InvoiceStatus = typeof INVOICE_STATUSES[number]
 export type FileCategory = typeof FILE_CATEGORIES[number]
 export type InvoiceEventType = typeof INVOICE_EVENT_TYPES[number]
+export type CommunicationChannel = typeof COMMUNICATION_CHANNELS[number]
+export type CommunicationDirection = typeof COMMUNICATION_DIRECTIONS[number]
+export type CommunicationStatus = typeof COMMUNICATION_STATUSES[number]
 
 export interface SessionUser {
   userId: string
@@ -117,17 +123,24 @@ export interface ProjectNote {
   updatedAt: string
 }
 
-export interface ProjectEmail {
+export interface ProjectCommunication {
   id: string
-  gmailMessageId: string
-  threadId: string
-  from: string
-  to: string
+  projectId: string
+  channel: CommunicationChannel
+  direction: CommunicationDirection
+  counterpartName: string
+  counterpartRole: string
+  counterpartAddress: string
   subject: string
   body: string
-  date: string
-  direction: 'inbound' | 'outbound'
+  status: CommunicationStatus
+  followUpDate: string | null
+  createdBy: string
+  createdAt: string
+  updatedAt: string
 }
+
+export type ProjectEmail = ProjectCommunication
 
 export interface ProjectDataResponse {
   files: ProjectFile[]
@@ -143,6 +156,18 @@ export interface ProjectTaskWriteInput {
   dueDate?: string | null
   notes?: string
   sortOrder?: number
+}
+
+export interface ProjectCommunicationWriteInput {
+  channel?: CommunicationChannel | null
+  direction?: CommunicationDirection | null
+  counterpartName?: string
+  counterpartRole?: string
+  counterpartAddress?: string
+  subject?: string
+  body?: string
+  status?: CommunicationStatus | null
+  followUpDate?: string | null
 }
 
 export interface ProjectWriteInput {
@@ -286,6 +311,18 @@ export function normalizeFileCategory(value: unknown): FileCategory {
 
 export function normalizeInvoiceEventType(value: unknown): InvoiceEventType | null {
   return isValueInList(value, INVOICE_EVENT_TYPES) ? value : null
+}
+
+export function normalizeCommunicationChannel(value: unknown): CommunicationChannel | null {
+  return isValueInList(value, COMMUNICATION_CHANNELS) ? value : null
+}
+
+export function normalizeCommunicationDirection(value: unknown): CommunicationDirection | null {
+  return isValueInList(value, COMMUNICATION_DIRECTIONS) ? value : null
+}
+
+export function normalizeCommunicationStatus(value: unknown): CommunicationStatus | null {
+  return isValueInList(value, COMMUNICATION_STATUSES) ? value : null
 }
 
 export function buildProjectTaskTemplate(projectType: ProjectType | null): ProjectTaskWriteInput[] {

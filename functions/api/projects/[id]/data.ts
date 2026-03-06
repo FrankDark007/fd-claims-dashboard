@@ -1,4 +1,4 @@
-import { listInvoiceEvents, listProjectFiles } from '../../_shared/project-store'
+import { listInvoiceEvents, listProjectCommunications, listProjectFiles } from '../../_shared/project-store'
 
 interface Env {
   FD_CLAIMS_DB: D1Database
@@ -11,14 +11,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Project ID required' }, { status: 400 })
   }
 
-  const [files, invoiceEvents] = await Promise.all([
+  const [files, communications, invoiceEvents] = await Promise.all([
     listProjectFiles(context.env.FD_CLAIMS_DB, projectId),
+    listProjectCommunications(context.env.FD_CLAIMS_DB, projectId),
     listInvoiceEvents(context.env.FD_CLAIMS_DB, projectId),
   ])
 
   return Response.json({
     files,
-    emails: [],
+    emails: communications,
     invoiceEvents,
   })
 }

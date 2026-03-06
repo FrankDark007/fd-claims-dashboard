@@ -7,11 +7,12 @@ import {
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline'
-import type { InvoiceEvent, Project, ProjectNote } from '../../shared/projects'
+import type { InvoiceEvent, Project, ProjectCommunication, ProjectNote } from '../../shared/projects'
 
 interface TimelineTabProps {
   project: Project
   invoiceEvents: InvoiceEvent[]
+  communications?: ProjectCommunication[]
   notes?: ProjectNote[]
   onCreateInvoiceEvent: (input: {
     type: 'sent' | 'reminder' | 'paid' | 'disputed'
@@ -32,7 +33,7 @@ interface TimelineTabProps {
 
 type TimelineItem = {
   id: string
-  type: 'system' | 'status' | 'follow-up' | 'invoice' | 'note'
+  type: 'system' | 'status' | 'follow-up' | 'invoice' | 'note' | 'communication'
   title: string
   description: string
   person?: string
@@ -60,6 +61,7 @@ const EMPTY_DRAFT: EventDraft = {
 export default function TimelineTab({
   project,
   invoiceEvents,
+  communications = [],
   notes = [],
   onCreateInvoiceEvent,
   onUpdateInvoiceEvent,
@@ -71,7 +73,7 @@ export default function TimelineTab({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [workingEventId, setWorkingEventId] = useState<string | null>(null)
-  const timeline = buildTimeline(project, invoiceEvents, notes)
+  const timeline = buildTimeline(project, invoiceEvents, communications, notes)
 
   useEffect(() => {
     if (editorMode === 'create') {
@@ -341,7 +343,12 @@ export default function TimelineTab({
   )
 }
 
-function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[], notes: ProjectNote[]): TimelineItem[] {
+function buildTimeline(
+  project: Project,
+  invoiceEvents: InvoiceEvent[],
+  communications: ProjectCommunication[],
+  notes: ProjectNote[],
+): TimelineItem[] {
   const items: TimelineItem[] = []
 
   if (project.createdAt) {
@@ -410,6 +417,18 @@ function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[], notes: P
     })
   }
 
+  for (const communication of communications) {
+    items.push({
+      id: communication.id,
+      type: 'communication',
+      title: communication.direction === 'outbound' ? 'Communication Sent' : 'Communication Received',
+      description: buildCommunicationDescription(communication),
+      person: communication.createdBy,
+      date: communication.updatedAt,
+      isCompleted: communication.status === 'replied' || communication.status === 'received',
+    })
+  }
+
   for (const note of notes) {
     items.push({
       id: note.id,
@@ -447,6 +466,26 @@ function buildEventDescription(event: InvoiceEvent) {
   return parts.join(' • ')
 }
 
+function buildCommunicationDescription(communication: ProjectCommunication) {
+  const parts = [
+    `${communication.channel.toUpperCase()} • ${communication.counterpartName || 'Unknown contact'}`,
+  ]
+
+  if (communication.subject) {
+    parts.push(communication.subject)
+  }
+
+  if (communication.body) {
+    parts.push(communication.body)
+  }
+
+  if (communication.followUpDate) {
+    parts.push(`Follow up ${formatDate(communication.followUpDate)}`)
+  }
+
+  return parts.join(' • ')
+}
+
 function formatDate(date: string) {
   return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString('en-US', {
     month: 'short',
@@ -474,6 +513,8 @@ function itemBadgeTone(type: TimelineItem['type']) {
   switch (type) {
     case 'invoice':
       return 'bg-blue-100 text-blue-700'
+    case 'communication':
+      return 'bg-violet-100 text-violet-700'
     case 'follow-up':
       return 'bg-amber-100 text-amber-700'
     case 'note':
@@ -489,6 +530,8 @@ function itemDot(type: TimelineItem['type']) {
   switch (type) {
     case 'invoice':
       return 'bg-blue-500'
+    case 'communication':
+      return 'bg-violet-500'
     case 'follow-up':
       return 'bg-amber-500'
     case 'note':

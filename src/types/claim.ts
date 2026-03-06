@@ -1,5 +1,6 @@
 export type {
   DocumentStatus as ContractStatus,
+  ProjectCommunication,
   DocumentStatus as COCStatus,
   DrylogStatus,
   FileCategory,

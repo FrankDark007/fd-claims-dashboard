@@ -2,6 +2,9 @@ import {
   addDays,
   computeInvoiceStatus,
   defaultDueDate,
+  normalizeCommunicationChannel,
+  normalizeCommunicationDirection,
+  normalizeCommunicationStatus,
   normalizeBoolean,
   normalizeDateOnly,
   normalizeDocumentStatus,
@@ -18,12 +21,17 @@ import {
   normalizeRewriteStatus,
 } from '../../../src/shared/projects'
 import type {
+  CommunicationChannel,
+  CommunicationDirection,
+  CommunicationStatus,
   FileCategory,
   InvoiceEvent,
   Project,
+  ProjectCommunication,
   ProjectFile,
   ProjectNote,
   ProjectTask,
+  ProjectCommunicationWriteInput,
   ProjectTaskWriteInput,
   ProjectWriteInput,
 } from '../../../src/shared/projects'
@@ -108,6 +116,23 @@ interface ProjectTaskRecord {
   dueDate: string | null
   notes: string
   sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProjectCommunicationRecord {
+  id: string
+  projectId: string
+  channel: string
+  direction: string
+  counterpartName: string
+  counterpartRole: string
+  counterpartAddress: string
+  subject: string
+  body: string
+  status: string
+  followUpDate: string | null
+  createdBy: string
   createdAt: string
   updatedAt: string
 }
@@ -206,6 +231,25 @@ const PROJECT_TASK_SELECT = `
   FROM project_tasks
 `
 
+const PROJECT_COMMUNICATION_SELECT = `
+  SELECT
+    id,
+    project_id AS projectId,
+    channel,
+    direction,
+    counterpart_name AS counterpartName,
+    counterpart_role AS counterpartRole,
+    counterpart_address AS counterpartAddress,
+    subject,
+    body,
+    status,
+    follow_up_date AS followUpDate,
+    created_by AS createdBy,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM project_communications
+`
+
 const PROJECT_SCHEMA_STATEMENTS = [
   `CREATE TABLE IF NOT EXISTS projects (
     id TEXT PRIMARY KEY,
@@ -289,6 +333,25 @@ const PROJECT_SCHEMA_STATEMENTS = [
   )`,
   'CREATE INDEX IF NOT EXISTS idx_project_tasks_project_id ON project_tasks(project_id)',
   'CREATE INDEX IF NOT EXISTS idx_project_tasks_sort_order ON project_tasks(project_id, sort_order)',
+  `CREATE TABLE IF NOT EXISTS project_communications (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    channel TEXT NOT NULL DEFAULT 'email',
+    direction TEXT NOT NULL DEFAULT 'outbound',
+    counterpart_name TEXT NOT NULL DEFAULT '',
+    counterpart_role TEXT NOT NULL DEFAULT '',
+    counterpart_address TEXT NOT NULL DEFAULT '',
+    subject TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'planned',
+    follow_up_date TEXT,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_project_communications_project_id ON project_communications(project_id, updated_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_project_communications_follow_up_date ON project_communications(follow_up_date)',
   `CREATE TABLE IF NOT EXISTS project_notes (
     id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
@@ -443,6 +506,25 @@ function mapProjectTaskRecord(record: ProjectTaskRecord): ProjectTask {
     dueDate: record.dueDate,
     notes: record.notes ?? '',
     sortOrder: record.sortOrder ?? 0,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }
+}
+
+function mapProjectCommunicationRecord(record: ProjectCommunicationRecord): ProjectCommunication {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    channel: normalizeCommunicationChannel(record.channel) ?? 'email',
+    direction: normalizeCommunicationDirection(record.direction) ?? 'outbound',
+    counterpartName: record.counterpartName ?? '',
+    counterpartRole: record.counterpartRole ?? '',
+    counterpartAddress: record.counterpartAddress ?? '',
+    subject: record.subject ?? '',
+    body: record.body ?? '',
+    status: normalizeCommunicationStatus(record.status) ?? 'planned',
+    followUpDate: record.followUpDate,
+    createdBy: record.createdBy,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   }
@@ -758,6 +840,32 @@ export async function listProjectTasks(db: D1Database, projectId: string): Promi
   })
 }
 
+export async function listAllProjectTasks(db: D1Database): Promise<ProjectTask[]> {
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(
+      `${PROJECT_TASK_SELECT} ORDER BY
+        CASE WHEN due_date IS NULL OR due_date = '' THEN 1 ELSE 0 END,
+        due_date ASC,
+        completed ASC,
+        updated_at DESC`
+    ).all<ProjectTaskRecord>()
+
+    return (result.results ?? []).map(mapProjectTaskRecord)
+  })
+}
+
+export async function listProjectCommunications(db: D1Database, projectId?: string): Promise<ProjectCommunication[]> {
+  return withProjectSchema(db, async () => {
+    const query = projectId
+      ? `${PROJECT_COMMUNICATION_SELECT} WHERE project_id = ? ORDER BY updated_at DESC, created_at DESC`
+      : `${PROJECT_COMMUNICATION_SELECT} ORDER BY updated_at DESC, created_at DESC`
+
+    const statement = projectId ? db.prepare(query).bind(projectId) : db.prepare(query)
+    const result = await statement.all<ProjectCommunicationRecord>()
+    return (result.results ?? []).map(mapProjectCommunicationRecord)
+  })
+}
+
 export async function replaceProjectTasks(
   db: D1Database,
   projectId: string,
@@ -853,6 +961,145 @@ export async function createProjectNote(
     ).run()
 
     return note
+  })
+}
+
+export async function createProjectCommunication(
+  db: D1Database,
+  params: {
+    projectId: string
+    channel?: CommunicationChannel | null
+    direction?: CommunicationDirection | null
+    counterpartName?: string
+    counterpartRole?: string
+    counterpartAddress?: string
+    subject?: string
+    body?: string
+    status?: CommunicationStatus | null
+    followUpDate?: string | null
+    createdBy: string
+  }
+): Promise<ProjectCommunication> {
+  return withProjectSchema(db, async () => {
+    const now = new Date().toISOString()
+    const communication: ProjectCommunication = {
+      id: crypto.randomUUID(),
+      projectId: params.projectId,
+      channel: normalizeCommunicationChannel(params.channel) ?? 'email',
+      direction: normalizeCommunicationDirection(params.direction) ?? 'outbound',
+      counterpartName: normalizeOptionalText(params.counterpartName),
+      counterpartRole: normalizeOptionalText(params.counterpartRole),
+      counterpartAddress: normalizeOptionalText(params.counterpartAddress),
+      subject: normalizeOptionalText(params.subject),
+      body: normalizeOptionalText(params.body),
+      status: normalizeCommunicationStatus(params.status) ?? 'planned',
+      followUpDate: normalizeDateOnly(params.followUpDate),
+      createdBy: params.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    await db.prepare(`
+      INSERT INTO project_communications (
+        id, project_id, channel, direction, counterpart_name, counterpart_role, counterpart_address,
+        subject, body, status, follow_up_date, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      communication.id,
+      communication.projectId,
+      communication.channel,
+      communication.direction,
+      communication.counterpartName,
+      communication.counterpartRole,
+      communication.counterpartAddress,
+      communication.subject,
+      communication.body,
+      communication.status,
+      communication.followUpDate,
+      communication.createdBy,
+      communication.createdAt,
+      communication.updatedAt,
+    ).run()
+
+    return communication
+  })
+}
+
+export async function updateProjectCommunication(
+  db: D1Database,
+  params: {
+    projectId: string
+    communicationId: string
+    input: ProjectCommunicationWriteInput
+  }
+): Promise<ProjectCommunication | null> {
+  return withProjectSchema(db, async () => {
+    const existing = await db.prepare(
+      `${PROJECT_COMMUNICATION_SELECT} WHERE project_id = ? AND id = ?`
+    ).bind(params.projectId, params.communicationId).first<ProjectCommunicationRecord>()
+
+    if (!existing) {
+      return null
+    }
+
+    const next: ProjectCommunication = {
+      id: existing.id,
+      projectId: existing.projectId,
+      channel: params.input.channel !== undefined
+        ? normalizeCommunicationChannel(params.input.channel) ?? 'email'
+        : normalizeCommunicationChannel(existing.channel) ?? 'email',
+      direction: params.input.direction !== undefined
+        ? normalizeCommunicationDirection(params.input.direction) ?? 'outbound'
+        : normalizeCommunicationDirection(existing.direction) ?? 'outbound',
+      counterpartName: params.input.counterpartName !== undefined ? normalizeOptionalText(params.input.counterpartName) : existing.counterpartName,
+      counterpartRole: params.input.counterpartRole !== undefined ? normalizeOptionalText(params.input.counterpartRole) : existing.counterpartRole,
+      counterpartAddress: params.input.counterpartAddress !== undefined ? normalizeOptionalText(params.input.counterpartAddress) : existing.counterpartAddress,
+      subject: params.input.subject !== undefined ? normalizeOptionalText(params.input.subject) : existing.subject,
+      body: params.input.body !== undefined ? normalizeOptionalText(params.input.body) : existing.body,
+      status: params.input.status !== undefined
+        ? normalizeCommunicationStatus(params.input.status) ?? 'planned'
+        : normalizeCommunicationStatus(existing.status) ?? 'planned',
+      followUpDate: params.input.followUpDate !== undefined ? normalizeDateOnly(params.input.followUpDate) : existing.followUpDate,
+      createdBy: existing.createdBy,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    }
+
+    await db.prepare(`
+      UPDATE project_communications
+      SET channel = ?, direction = ?, counterpart_name = ?, counterpart_role = ?, counterpart_address = ?,
+          subject = ?, body = ?, status = ?, follow_up_date = ?, updated_at = ?
+      WHERE project_id = ? AND id = ?
+    `).bind(
+      next.channel,
+      next.direction,
+      next.counterpartName,
+      next.counterpartRole,
+      next.counterpartAddress,
+      next.subject,
+      next.body,
+      next.status,
+      next.followUpDate,
+      next.updatedAt,
+      params.projectId,
+      params.communicationId,
+    ).run()
+
+    return next
+  })
+}
+
+export async function deleteProjectCommunication(
+  db: D1Database,
+  projectId: string,
+  communicationId: string,
+): Promise<boolean> {
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(
+      'DELETE FROM project_communications WHERE project_id = ? AND id = ?'
+    ).bind(projectId, communicationId).run()
+
+    return (result.meta.changes ?? 0) > 0
   })
 }
 

@@ -1,6 +1,6 @@
 import { useState, Fragment } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react'
-import { LinkIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, LinkIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline'
 
 interface ShareLinkModalProps {
   open: boolean
@@ -21,6 +21,7 @@ const EXPIRY_OPTIONS = [
 export default function ShareLinkModal({ open, onClose, projectId, fileId, fileName, token }: ShareLinkModalProps) {
   const [expiresInHours, setExpiresInHours] = useState(72)
   const [shareUrl, setShareUrl] = useState<string | null>(null)
+  const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,8 +45,9 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
         throw new Error((err as { error: string }).error)
       }
 
-      const data = await res.json() as { shareUrl: string }
+      const data = await res.json() as { shareUrl: string; expiresAt: string }
       setShareUrl(data.shareUrl)
+      setExpiresAt(data.expiresAt)
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create share link')
     } finally {
@@ -62,6 +64,7 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
 
   const handleClose = () => {
     setShareUrl(null)
+    setExpiresAt(null)
     setCopied(false)
     setError(null)
     onClose()
@@ -169,12 +172,36 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
                       Anyone with this link can download the file. Link expires in{' '}
                       {EXPIRY_OPTIONS.find(o => o.value === expiresInHours)?.label || `${expiresInHours}h`}.
                     </p>
-                    <button
-                      onClick={handleClose}
-                      className="w-full rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
-                    >
-                      Done
-                    </button>
+                    {expiresAt && (
+                      <p className="text-center text-xs text-gray-500">
+                        Expires on {new Date(expiresAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    )}
+                    <div className="flex gap-3">
+                      <a
+                        href={shareUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 rounded-md bg-white px-3 py-2 text-center text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <ArrowTopRightOnSquareIcon className="size-4" />
+                          Open Link
+                        </span>
+                      </a>
+                      <button
+                        onClick={handleClose}
+                        className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
+                      >
+                        Done
+                      </button>
+                    </div>
                   </div>
                 )}
               </DialogPanel>

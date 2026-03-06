@@ -3,20 +3,26 @@ import {
   ArrowTrendingDownIcon,
   ArrowTrendingUpIcon,
   BanknotesIcon,
+  ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
+  ClipboardDocumentListIcon,
   DocumentMagnifyingGlassIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import type { Project } from '../types/claim'
 import { computeStats, computeAging } from '../hooks/useProjects'
+import { useAllCommunications, useAllTasks } from '../hooks/useOperationalQueues'
 import StatusPill from '../components/StatusPill'
 
 interface DashboardPageProps {
   projects: Project[]
   loading: boolean
+  token: string
 }
 
-export default function DashboardPage({ projects, loading }: DashboardPageProps) {
+export default function DashboardPage({ projects, loading, token }: DashboardPageProps) {
+  const { tasks, loading: tasksLoading } = useAllTasks(token)
+  const { communications, loading: communicationsLoading } = useAllCommunications(token)
   const stats = computeStats(projects)
   const agingBuckets = computeAging(projects)
   const today = new Date().toISOString().slice(0, 10)
@@ -47,7 +53,32 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
     return diff >= 0 && diff <= 7
   }).length
 
-  if (loading) {
+  const openTasks = tasks.filter((task) => !task.completed)
+  const dueTasks = openTasks
+    .filter((task) => task.dueDate && task.dueDate <= today)
+    .slice(0, 8)
+
+  const recentCommunications = communications.slice(0, 6)
+  const recentContactCount = communications.filter((communication) => {
+    const diff = Math.floor(
+      (new Date(`${today}T12:00:00`).getTime() - new Date(communication.updatedAt).getTime()) / 86400000,
+    )
+    return diff <= 7
+  }).length
+
+  const staleCollectionsCount = unpaidProjects.filter((project) => {
+    const lastCommunication = communications.find((communication) => communication.projectId === project.id)
+    if (!lastCommunication) {
+      return true
+    }
+
+    const diff = Math.floor(
+      (new Date(`${today}T12:00:00`).getTime() - new Date(lastCommunication.updatedAt).getTime()) / 86400000,
+    )
+    return diff > 7
+  }).length
+
+  if (loading || tasksLoading || communicationsLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -62,11 +93,10 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Operations snapshot</p>
             <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-              Claims, collections, and document readiness in one board.
+              Claims, collections, task load, and communication cadence in one board.
             </h2>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-              Keep unpaid invoices moving, spot missing documentation, and jump straight into the next project that
-              needs action.
+              Keep unpaid invoices moving, surface stale follow-up, and make it obvious which jobs need new outreach or internal action today.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
               <Link
@@ -90,9 +120,9 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
               detail={`${followUpTodayCount} today · ${followUpThisWeekCount} this week`}
             />
             <SummaryPanel
-              label="Documents ready"
-              value={documentsReadyCount.toString()}
-              detail={`${projects.length - documentsReadyCount} still missing contract or COC`}
+              label="Stale collections contact"
+              value={staleCollectionsCount.toString()}
+              detail={`${recentContactCount} communications logged in the last 7 days`}
             />
           </div>
         </div>
@@ -226,9 +256,88 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
               <ReadinessRow label="COC signed" value={projects.filter((project) => project.cocStatus === 'Signed').length} total={projects.length} />
               <ReadinessRow label="Dry logs received" value={projects.filter((project) => project.drylogStatus === 'Received').length} total={projects.length} />
               <ReadinessRow label="Matterport captured" value={projects.filter((project) => project.matterportStatus === 'Has Scan').length} total={projects.length} />
+              <ReadinessRow label="Docs ready" value={documentsReadyCount} total={projects.length} />
             </div>
           </section>
         </div>
+      </div>
+
+      <div className="grid gap-8 xl:grid-cols-2">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Task queue</p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-950">Internal work due now</h3>
+            </div>
+            <ClipboardDocumentListIcon className="size-5 text-slate-400" />
+          </div>
+
+          {dueTasks.length === 0 ? (
+            <div className="py-12 text-sm text-slate-500">No overdue or due-today tasks are open.</div>
+          ) : (
+            <ul className="mt-6 space-y-3">
+              {dueTasks.map((task) => {
+                const project = projects.find((candidate) => candidate.id === task.projectId)
+                return (
+                  <li key={task.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                        {project && (
+                          <Link to={`/projects/${project.id}`} className="mt-2 block text-sm text-primary hover:text-primary-hover">
+                            {project.clientName}
+                          </Link>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">
+                          {task.assignee || 'Unassigned'}{task.dueDate ? ` · Due ${formatDate(task.dueDate)}` : ''}
+                        </p>
+                      </div>
+                      {task.dueDate && <span className="text-xs font-semibold text-rose-700">{followUpLabel(task.dueDate, today)}</span>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Recent communications</p>
+              <h3 className="mt-2 text-xl font-semibold text-slate-950">Latest outreach and replies</h3>
+            </div>
+            <ChatBubbleLeftRightIcon className="size-5 text-slate-400" />
+          </div>
+
+          {recentCommunications.length === 0 ? (
+            <div className="py-12 text-sm text-slate-500">No communications have been logged yet.</div>
+          ) : (
+            <ul className="mt-6 space-y-3">
+              {recentCommunications.map((communication) => {
+                const project = projects.find((candidate) => candidate.id === communication.projectId)
+                return (
+                  <li key={communication.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{communication.subject || '(No subject)'}</p>
+                        {project && (
+                          <Link to={`/projects/${project.id}`} className="mt-2 block text-sm text-primary hover:text-primary-hover">
+                            {project.clientName}
+                          </Link>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">
+                          {labelize(communication.direction)} {labelize(communication.channel)} · {communication.counterpartName || 'Unknown contact'}
+                        </p>
+                      </div>
+                      <span className="text-xs text-slate-500">{formatDate(communication.updatedAt.slice(0, 10))}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
       </div>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -399,4 +508,8 @@ function getInitials(value: string) {
     .slice(0, 2)
     .map((token) => token[0]?.toUpperCase() ?? '')
     .join('')
+}
+
+function labelize(value: string) {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }

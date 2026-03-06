@@ -10,6 +10,7 @@ import {
 import type { Project } from '../types/claim'
 import { useProject, useProjectData } from '../hooks/useProject'
 import { useProjectNotes } from '../hooks/useProjectNotes'
+import { useProjectCommunications } from '../hooks/useProjectCommunications'
 import { useProjectTasks } from '../hooks/useProjectTasks'
 import StatusPill from '../components/StatusPill'
 import OverviewTab from '../components/project/OverviewTab'
@@ -58,6 +59,13 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
     loading: tasksLoading,
     saveTasks,
   } = useProjectTasks(id, token)
+  const {
+    communications,
+    loading: communicationsLoading,
+    createCommunication,
+    updateCommunication,
+    deleteCommunication,
+  } = useProjectCommunications(id, token)
   const [activeTab, setActiveTab] = useState<TabId>('overview')
 
   const handleProjectSave = async (input: Parameters<typeof saveProject>[0]) => {
@@ -108,10 +116,10 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
     { name: 'Overview', id: 'overview', count: undefined },
     { name: 'Financials', id: 'financials', count: data.invoiceEvents.length || undefined },
     { name: 'Files', id: 'files', count: data.files.length || undefined },
-    { name: 'Timeline', id: 'timeline', count: data.invoiceEvents.length + notes.length || undefined },
+    { name: 'Timeline', id: 'timeline', count: data.invoiceEvents.length + notes.length + communications.length || undefined },
     { name: 'Tasks', id: 'tasks', count: tasks.length || undefined },
     { name: 'Notes', id: 'notes', count: notes.length || undefined },
-    { name: 'Email', id: 'email', count: data.emails.length || undefined },
+    { name: 'Comms', id: 'email', count: communications.length || undefined },
   ] satisfies Array<{ name: string; id: TabId; count?: number }>
 
   const quickStats = [
@@ -318,6 +326,7 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
             <TimelineTab
               project={project}
               invoiceEvents={data.invoiceEvents}
+              communications={communications}
               notes={notes}
               onCreateInvoiceEvent={handleAddInvoiceEvent}
               onUpdateInvoiceEvent={handleUpdateInvoiceEvent}
@@ -341,7 +350,16 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
               onDelete={removeNote}
             />
           )}
-          {activeTab === 'email' && <EmailTab />}
+          {activeTab === 'email' && (
+            <EmailTab
+              project={project}
+              communications={communications}
+              loading={communicationsLoading}
+              onCreate={createCommunication}
+              onUpdate={updateCommunication}
+              onDelete={deleteCommunication}
+            />
+          )}
         </div>
       </section>
     </div>

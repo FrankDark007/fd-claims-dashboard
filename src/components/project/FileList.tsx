@@ -168,16 +168,44 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
 
           const config = CATEGORY_CONFIG[cat]
           const Icon = config.icon
+          const latestFile = [...catFiles].sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())[0]
 
           return (
             <div key={cat}>
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-3">
-                <Icon className="size-5 text-gray-400" />
-                {config.label}
-                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                  {catFiles.length}
-                </span>
-              </h3>
+              <div className="mb-3 flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <Icon className="size-5 text-gray-400" />
+                    {config.label}
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      {catFiles.length}
+                    </span>
+                  </h3>
+                  {latestFile && (
+                    <p className="mt-2 text-xs text-gray-500">
+                      Latest upload: {latestFile.originalName} on {formatDate(latestFile.uploadedAt)}
+                    </p>
+                  )}
+                </div>
+                {latestFile && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void handleDownload(latestFile)}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      <ArrowDownTrayIcon className="size-4" />
+                      Download latest
+                    </button>
+                    <button
+                      onClick={() => setShareFile({ id: latestFile.id, name: latestFile.originalName })}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50"
+                    >
+                      <ShareIcon className="size-4" />
+                      Share latest
+                    </button>
+                  </div>
+                )}
+              </div>
 
               <ul className="divide-y divide-gray-100 rounded-lg border border-gray-200 bg-white">
                 {catFiles.map((file) => (

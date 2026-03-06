@@ -1,18 +1,24 @@
 import { Link } from 'react-router-dom'
 import {
   BanknotesIcon,
+  ChatBubbleLeftRightIcon,
   ClipboardDocumentCheckIcon,
+  ClipboardDocumentListIcon,
   ClockIcon,
   QueueListIcon,
 } from '@heroicons/react/24/outline'
 import type { Project } from '../shared/projects'
+import { useAllCommunications, useAllTasks } from '../hooks/useOperationalQueues'
 
 interface ReportsPageProps {
   projects: Project[]
   loading: boolean
+  token: string
 }
 
-export default function ReportsPage({ projects, loading }: ReportsPageProps) {
+export default function ReportsPage({ projects, loading, token }: ReportsPageProps) {
+  const { tasks, loading: tasksLoading } = useAllTasks(token)
+  const { communications, loading: communicationsLoading } = useAllCommunications(token)
   const today = new Date().toISOString().slice(0, 10)
 
   const outstandingProjects = projects.filter((project) => project.invoiceStatus !== 'Paid')
@@ -28,6 +34,26 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
   const outstandingBalance = outstandingProjects.reduce((sum, project) => sum + (project.amount ?? 0), 0)
   const overdueBalance = overdueProjects.reduce((sum, project) => sum + (project.amount ?? 0), 0)
   const documentsReady = projects.filter((project) => project.contractStatus === 'Signed' && project.cocStatus === 'Signed').length
+  const openTasks = tasks.filter((task) => !task.completed)
+  const dueTasks = openTasks.filter((task) => task.dueDate && task.dueDate <= today)
+  const recentCommunications = communications.filter((communication) => {
+    const diff = Math.floor(
+      (new Date(`${today}T12:00:00`).getTime() - new Date(communication.updatedAt).getTime()) / 86400000,
+    )
+    return diff <= 7
+  })
+
+  const staleCollectionsCount = outstandingProjects.filter((project) => {
+    const lastCommunication = communications.find((communication) => communication.projectId === project.id)
+    if (!lastCommunication) {
+      return true
+    }
+
+    const diff = Math.floor(
+      (new Date(`${today}T12:00:00`).getTime() - new Date(lastCommunication.updatedAt).getTime()) / 86400000,
+    )
+    return diff > 7
+  }).length
 
   const projectTypeBreakdown = ['Water Mitigation', 'Pack-out', 'Mold Remediation'].map((type) => {
     const matching = projects.filter((project) => project.projectType === type)
@@ -57,7 +83,7 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
     },
   ]
 
-  if (loading) {
+  if (loading || tasksLoading || communicationsLoading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -71,10 +97,9 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Reporting</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Operational reporting for collections and production.</h2>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">Operational reporting for collections, tasks, and communication cadence.</h2>
             <p className="mt-4 max-w-3xl text-sm leading-6 text-slate-600">
-              Use this view for a quick weekly readout: cash exposure, follow-up pressure, document gaps, and how the
-              current workload is split across job types.
+              Use this view for a weekly readout: cash exposure, stale outreach, open tasks, document blockers, and workload mix by project type.
             </p>
           </div>
           <Link
@@ -86,7 +111,7 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <ReportStat
           label="Outstanding balance"
           value={`$${outstandingBalance.toLocaleString()}`}
@@ -110,6 +135,18 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
           value={documentsReady.toString()}
           subtitle={`${projects.length} total projects`}
           icon={ClipboardDocumentCheckIcon}
+        />
+        <ReportStat
+          label="Open tasks"
+          value={openTasks.length.toString()}
+          subtitle={`${dueTasks.length} due now`}
+          icon={ClipboardDocumentListIcon}
+        />
+        <ReportStat
+          label="Stale collections contact"
+          value={staleCollectionsCount.toString()}
+          subtitle={`${recentCommunications.length} touches in last 7 days`}
+          icon={ChatBubbleLeftRightIcon}
         />
       </div>
 
@@ -180,6 +217,74 @@ export default function ReportsPage({ projects, loading }: ReportsPageProps) {
         </section>
       </div>
 
+      <div className="grid gap-8 xl:grid-cols-2">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Task backlog</p>
+          <h3 className="mt-2 text-xl font-semibold text-slate-950">Tasks due now</h3>
+          <p className="mt-2 text-sm text-slate-600">Action items that are overdue or scheduled for today.</p>
+
+          {dueTasks.length === 0 ? (
+            <div className="py-10 text-sm text-slate-500">No open tasks are due right now.</div>
+          ) : (
+            <ul className="mt-6 space-y-3">
+              {dueTasks.slice(0, 10).map((task) => {
+                const project = projects.find((candidate) => candidate.id === task.projectId)
+                return (
+                  <li key={task.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{task.title}</p>
+                        {project && (
+                          <Link to={`/projects/${project.id}`} className="mt-2 block text-sm text-primary hover:text-primary-hover">
+                            {project.clientName}
+                          </Link>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">{task.assignee || 'Unassigned'}</p>
+                      </div>
+                      {task.dueDate && <span className="text-xs font-semibold text-rose-700">{describeLag(task.dueDate, today)}</span>}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Communication cadence</p>
+          <h3 className="mt-2 text-xl font-semibold text-slate-950">Recent outreach</h3>
+          <p className="mt-2 text-sm text-slate-600">Latest logged messages, calls, texts, and meetings across the board.</p>
+
+          {communications.length === 0 ? (
+            <div className="py-10 text-sm text-slate-500">No communications have been logged yet.</div>
+          ) : (
+            <ul className="mt-6 space-y-3">
+              {communications.slice(0, 10).map((communication) => {
+                const project = projects.find((candidate) => candidate.id === communication.projectId)
+                return (
+                  <li key={communication.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900">{communication.subject || '(No subject)'}</p>
+                        {project && (
+                          <Link to={`/projects/${project.id}`} className="mt-2 block text-sm text-primary hover:text-primary-hover">
+                            {project.clientName}
+                          </Link>
+                        )}
+                        <p className="mt-1 text-xs text-slate-500">
+                          {labelize(communication.direction)} {labelize(communication.channel)} · {communication.counterpartName || 'Unknown contact'}
+                        </p>
+                      </div>
+                      <span className="text-xs text-slate-500">{formatDate(communication.updatedAt.slice(0, 10))}</span>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Project mix</p>
         <h3 className="mt-2 text-xl font-semibold text-slate-950">Current workload by job type</h3>
@@ -244,4 +349,8 @@ function describeLag(date: string, today: string) {
   }
 
   return `in ${diff} day${diff === 1 ? '' : 's'}`
+}
+
+function labelize(value: string) {
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase())
 }
