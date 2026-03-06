@@ -57,17 +57,19 @@ function shouldBootstrapLocalAdmin(request: Request, username: string, password:
 }
 
 async function upsertLocalAdmin(env: Env): Promise<AuthUserRecord> {
+  const existingJson = await env.FD_CLAIMS_USERS.get(`user:${LOCAL_ADMIN.username}`)
+  const existing = existingJson ? JSON.parse(existingJson) as Partial<AuthUserRecord> : null
   const salt = crypto.randomUUID()
   const passwordHash = await hashPassword(LOCAL_ADMIN.password, salt)
   const user: AuthUserRecord = {
-    id: crypto.randomUUID(),
+    id: existing?.id || crypto.randomUUID(),
     username: LOCAL_ADMIN.username,
     displayName: LOCAL_ADMIN.displayName,
     passwordHash,
     salt,
     role: LOCAL_ADMIN.role,
     email: LOCAL_ADMIN.email,
-    createdAt: new Date().toISOString(),
+    createdAt: existing?.createdAt || new Date().toISOString(),
   }
   await env.FD_CLAIMS_USERS.put(`user:${LOCAL_ADMIN.username}`, JSON.stringify(user))
   return user
