@@ -13,12 +13,13 @@ id = "18281eb24d2a4be2bdb52ac0ef39fa23"
 [[d1_databases]]
 binding = "FD_CLAIMS_DB"
 database_name = "fd-claims-dashboard"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
-preview_database_id = "REPLACE_WITH_D1_PREVIEW_DATABASE_ID"
+database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
+preview_database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
 
-[[r2_buckets]]
-binding = "FD_PROJECT_FILES"
-bucket_name = "fd-project-files"
+# R2 TEMPORARILY REMOVED — enable R2 in Cloudflare Dashboard, create bucket, then uncomment:
+# [[r2_buckets]]
+# binding = "FD_PROJECT_FILES"
+# bucket_name = "fd-project-files"
 
 [vars]
 GOOGLE_CLIENT_ID = ""
