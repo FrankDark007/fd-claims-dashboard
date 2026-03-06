@@ -609,33 +609,109 @@ export async function getInvoiceEventById(
   return record ? mapInvoiceEventRecord(record) : null
 }
 
-async function syncProjectWithInvoiceEvent(db: D1Database, projectId: string, event: InvoiceEvent): Promise<void> {
+function getLatestInvoiceEvent(events: InvoiceEvent[], type: InvoiceEvent['type']): InvoiceEvent | null {
+  const matching = events
+    .filter((event) => event.type === type)
+    .sort((a, b) => {
+      const eventDateDiff = new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+      if (eventDateDiff !== 0) {
+        return eventDateDiff
+      }
+
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    })
+
+  return matching[0] ?? null
+}
+
+async function reconcileProjectInvoiceWorkflow(
+  db: D1Database,
+  projectId: string,
+  previousEvent?: InvoiceEvent | null,
+  nextEvent?: InvoiceEvent | null
+): Promise<void> {
   const project = await getProjectRecord(db, projectId)
   if (!project) {
     return
   }
 
+  const events = await listInvoiceEvents(db, projectId)
+  const latestSent = getLatestInvoiceEvent(events, 'sent')
+  const latestReminder = getLatestInvoiceEvent(events, 'reminder')
+  const latestPaid = getLatestInvoiceEvent(events, 'paid')
   const patch: ProjectWriteInput = {}
 
-  if (event.type === 'sent') {
-    patch.invoiceStatus = 'Sent'
-    patch.invoiceSentDate = event.eventDate
-    if (!project.dueDate) {
-      patch.dueDate = defaultDueDate(event.eventDate)
+  const oldDerivedDueDate = previousEvent?.type === 'sent' ? defaultDueDate(previousEvent.eventDate) : null
+  const oldDerivedFollowUpDate = previousEvent?.type === 'reminder'
+    ? addDays(previousEvent.eventDate, 7)
+    : previousEvent?.type === 'sent'
+      ? defaultDueDate(previousEvent.eventDate)
+      : null
+
+  const shouldSyncSentDate = nextEvent?.type === 'sent'
+    || (!project.invoiceSentDate)
+    || (previousEvent?.type === 'sent' && project.invoiceSentDate === previousEvent.eventDate)
+
+  if ((previousEvent?.type === 'sent' || nextEvent?.type === 'sent') && shouldSyncSentDate) {
+    patch.invoiceSentDate = latestSent?.eventDate ?? null
+  }
+
+  const shouldSyncDueDate = nextEvent?.type === 'sent'
+    || (!project.dueDate)
+    || (oldDerivedDueDate !== null && project.dueDate === oldDerivedDueDate)
+
+  if ((previousEvent?.type === 'sent' || nextEvent?.type === 'sent') && shouldSyncDueDate) {
+    patch.dueDate = latestSent ? defaultDueDate(latestSent.eventDate) : null
+  }
+
+  if (latestPaid) {
+    if (project.paymentReceivedDate !== latestPaid.eventDate) {
+      patch.paymentReceivedDate = latestPaid.eventDate
     }
-    if (!project.nextFollowUpDate && !project.paymentReceivedDate) {
-      patch.nextFollowUpDate = defaultDueDate(event.eventDate)
+
+    if (project.invoiceStatus !== 'Paid') {
+      patch.invoiceStatus = 'Paid'
+    }
+
+    if (project.nextFollowUpDate !== null) {
+      patch.nextFollowUpDate = null
+    }
+  } else {
+    if (previousEvent?.type === 'paid' && project.paymentReceivedDate === previousEvent.eventDate) {
+      patch.paymentReceivedDate = null
+    }
+
+    if (previousEvent?.type === 'paid' && project.invoiceStatus === 'Paid') {
+      patch.invoiceStatus = latestSent ? 'Sent' : 'Draft'
+    }
+
+    const derivedFollowUpDate = latestReminder
+      ? addDays(latestReminder.eventDate, 7)
+      : latestSent
+        ? defaultDueDate(latestSent.eventDate)
+        : null
+
+    const shouldSyncFollowUp = nextEvent?.type === 'reminder'
+      || nextEvent?.type === 'sent'
+      || previousEvent?.type === 'paid'
+      || (!project.nextFollowUpDate)
+      || (oldDerivedFollowUpDate !== null && project.nextFollowUpDate === oldDerivedFollowUpDate)
+
+    if (shouldSyncFollowUp && project.nextFollowUpDate !== derivedFollowUpDate) {
+      patch.nextFollowUpDate = derivedFollowUpDate
     }
   }
 
-  if (event.type === 'reminder' && !project.paymentReceivedDate) {
-    patch.nextFollowUpDate = addDays(event.eventDate, 7)
-  }
-
-  if (event.type === 'paid') {
-    patch.invoiceStatus = 'Paid'
-    patch.paymentReceivedDate = event.eventDate
-    patch.nextFollowUpDate = null
+  if (!latestPaid && (previousEvent?.type === 'sent' || nextEvent?.type === 'sent')) {
+    const nextInvoiceStatus = latestSent ? 'Sent' : 'Draft'
+    if (
+      nextEvent?.type === 'sent'
+      || project.invoiceStatus === 'Sent'
+      || project.invoiceStatus === 'Draft'
+      || project.invoiceStatus === 'Overdue'
+    ) {
+      patch.invoiceStatus = nextInvoiceStatus
+    }
   }
 
   if (Object.keys(patch).length > 0) {
@@ -689,7 +765,7 @@ export async function createInvoiceEvent(
     event.eventDate
   ).run()
 
-  await syncProjectWithInvoiceEvent(db, event.projectId, event)
+  await reconcileProjectInvoiceWorkflow(db, event.projectId, null, event)
 
   return event
 }
@@ -744,11 +820,22 @@ export async function updateInvoiceEvent(
     params.eventId
   ).run()
 
-  await syncProjectWithInvoiceEvent(db, params.projectId, next)
+  await reconcileProjectInvoiceWorkflow(db, params.projectId, existing, next)
   return next
 }
 
 export async function deleteInvoiceEvent(db: D1Database, projectId: string, eventId: string): Promise<boolean> {
+  const existing = await getInvoiceEventById(db, projectId, eventId)
+  if (!existing) {
+    return false
+  }
+
   const result = await db.prepare('DELETE FROM invoice_events WHERE project_id = ? AND id = ?').bind(projectId, eventId).run()
-  return (result.meta.changes ?? 0) > 0
+  const deleted = (result.meta.changes ?? 0) > 0
+
+  if (deleted) {
+    await reconcileProjectInvoiceWorkflow(db, projectId, existing, null)
+  }
+
+  return deleted
 }
