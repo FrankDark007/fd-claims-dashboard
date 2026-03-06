@@ -50,7 +50,7 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          clientName: clientName.trim(),
+          clientName: clientName.trim().replace(/\b\w/g, c => c.toUpperCase()),
           projectName: project.trim() || undefined,
           projectType: projectType || undefined,
           amount: amount ? parseFloat(amount) : undefined,

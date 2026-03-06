@@ -1,6 +1,11 @@
 import { createProject, listProjects } from './_shared/project-store'
 import { parseProjectWriteInput } from './_shared/project-http'
 
+/** "drew harmon" → "Drew Harmon" */
+function titleCase(name: string): string {
+  return name.trim().replace(/\b\w/g, c => c.toUpperCase())
+}
+
 interface Env {
   FD_CLAIMS_DB: D1Database
 }
@@ -18,6 +23,8 @@ export async function handleCreateProject(context: EventContext<Env, string, unk
     if (!input.clientName?.trim()) {
       return Response.json({ error: 'Client name is required' }, { status: 400 })
     }
+
+    input.clientName = titleCase(input.clientName)
 
     const project = await createProject(context.env.FD_CLAIMS_DB, input)
     return Response.json({ project }, { status: 201 })
