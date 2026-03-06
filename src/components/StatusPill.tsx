@@ -17,12 +17,18 @@ const colorMap: Record<string, string> = {
   // Rewrite Status
   'In Progress': 'bg-yellow-100 text-yellow-800',
   Done: 'bg-green-100 text-green-700',
+  Received: 'bg-green-100 text-green-700',
 
   // Invoice Status
   Draft: 'bg-gray-100 text-gray-600',
   Sent: 'bg-blue-100 text-blue-700',
   Paid: 'bg-green-100 text-green-700',
   Overdue: 'bg-red-100 text-red-700',
+
+  // Project Status
+  Active: 'bg-blue-100 text-blue-700',
+  'On Hold': 'bg-yellow-100 text-yellow-800',
+  Archived: 'bg-gray-100 text-gray-600',
 }
 
 interface StatusPillProps {

@@ -8,9 +8,10 @@ export function useAuth() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem(TOKEN_KEY))
   const [user, setUser] = useState<User | null>(() => {
     const stored = localStorage.getItem(USER_KEY)
-    return stored ? JSON.parse(stored) : null
+      return stored ? JSON.parse(stored) : null
   })
   const [loading, setLoading] = useState(false)
+  const [initializing, setInitializing] = useState(() => !!localStorage.getItem(TOKEN_KEY))
   const [error, setError] = useState<string | null>(null)
 
   const isAuthenticated = !!token && !!user
@@ -78,15 +79,50 @@ export function useAuth() {
 
   // Verify token is still valid on mount
   useEffect(() => {
-    if (!token) return
-    fetch('/api/claims', {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then((res) => {
-      if (res.status === 401) {
+    if (!token) {
+      setInitializing(false)
+      return
+    }
+
+    let cancelled = false
+
+    const restoreSession = async () => {
+      try {
+        const res = await fetch('/api/session', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (cancelled) {
+          return
+        }
+
+        if (res.status === 401) {
+          logout()
+          return
+        }
+
+        if (!res.ok) {
+          throw new Error(`API error: ${res.status}`)
+        }
+
+        const data = await res.json() as { user: User }
+        localStorage.setItem(USER_KEY, JSON.stringify(data.user))
+        setUser(data.user)
+      } catch {
         logout()
+      } finally {
+        if (!cancelled) {
+          setInitializing(false)
+        }
       }
-    }).catch(() => {})
+    }
+
+    restoreSession()
+
+    return () => {
+      cancelled = true
+    }
   }, [token, logout])
 
-  return { isAuthenticated, token, user, login, googleLogin, logout, loading, error }
+  return { isAuthenticated, token, user, login, googleLogin, logout, loading, error, initializing }
 }

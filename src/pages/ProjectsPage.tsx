@@ -1,28 +1,28 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PlusIcon } from '@heroicons/react/20/solid'
-import type { Claim } from '../types/claim'
+import type { Project } from '../types/claim'
 import StatusPill from '../components/StatusPill'
 import CreateProjectModal from '../components/CreateProjectModal'
 
 interface ProjectsPageProps {
-  claims: Claim[]
+  projects: Project[]
   loading: boolean
   token: string
   onRefresh: () => void
 }
 
-export default function ProjectsPage({ claims, loading, token, onRefresh }: ProjectsPageProps) {
+export default function ProjectsPage({ projects, loading, token, onRefresh }: ProjectsPageProps) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
 
-  const filtered = claims.filter((c) => {
+  const filtered = projects.filter((project) => {
     const matchesSearch =
-      c.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      c.project.toLowerCase().includes(search.toLowerCase()) ||
-      c.xactimateNumber.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = filterStatus === 'all' || c.status === filterStatus
+      project.clientName.toLowerCase().includes(search.toLowerCase()) ||
+      project.projectName.toLowerCase().includes(search.toLowerCase()) ||
+      project.xactimateNumber.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
     return matchesSearch && matchesStatus
   })
 
@@ -39,7 +39,7 @@ export default function ProjectsPage({ claims, loading, token, onRefresh }: Proj
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Projects</h1>
-          <p className="text-sm text-secondary mt-1">{claims.length} total projects</p>
+          <p className="text-sm text-secondary mt-1">{projects.length} total projects</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -49,14 +49,6 @@ export default function ProjectsPage({ claims, loading, token, onRefresh }: Proj
             <PlusIcon className="size-4" />
             Create Project
           </button>
-          <a
-            href="https://www.notion.so/3a496fa362994550910a04937d747166"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 transition-colors shadow-sm"
-          >
-            Open in Notion
-          </a>
         </div>
       </div>
 
@@ -106,44 +98,44 @@ export default function ProjectsPage({ claims, loading, token, onRefresh }: Proj
             </tr>
           </thead>
           <tbody className="divide-y divide-faint/50">
-            {filtered.map((claim) => (
-              <tr key={claim.id} className="hover:bg-surface-alt transition-colors">
+            {filtered.map((project) => (
+              <tr key={project.id} className="hover:bg-surface-alt transition-colors">
                 <td className="px-4 py-3 font-mono text-xs text-muted">
-                  {claim.invoiceId || '\u2014'}
+                  {project.invoiceId || '\u2014'}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="font-medium text-foreground">{claim.clientName}</div>
-                  {claim.xactimateNumber && (
-                    <div className="text-xs text-muted">XA: {claim.xactimateNumber}</div>
+                  <div className="font-medium text-foreground">{project.clientName}</div>
+                  {project.xactimateNumber && (
+                    <div className="text-xs text-muted">XA: {project.xactimateNumber}</div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-secondary max-w-[160px] truncate">
-                  {claim.project || '\u2014'}
+                  {project.projectName || '\u2014'}
                 </td>
                 <td className="px-4 py-3">
-                  {claim.projectType ? (
+                  {project.projectType ? (
                     <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      claim.projectType === 'Water Mitigation' ? 'bg-blue-100 text-blue-700' :
-                      claim.projectType === 'Pack-out' ? 'bg-purple-100 text-purple-700' :
-                      claim.projectType === 'Mold Remediation' ? 'bg-red-100 text-red-700' :
+                      project.projectType === 'Water Mitigation' ? 'bg-blue-100 text-blue-700' :
+                      project.projectType === 'Pack-out' ? 'bg-purple-100 text-purple-700' :
+                      project.projectType === 'Mold Remediation' ? 'bg-red-100 text-red-700' :
                       'bg-gray-100 text-gray-600'
                     }`}>
-                      {claim.projectType}
+                      {project.projectType}
                     </span>
                   ) : <span className="text-muted text-xs">{'\u2014'}</span>}
                 </td>
                 <td className="px-4 py-3 text-right font-medium tabular-nums">
-                  {claim.amount ? `$${claim.amount.toLocaleString()}` : '\u2014'}
+                  {project.amount ? `$${project.amount.toLocaleString()}` : '\u2014'}
                 </td>
-                <td className="px-4 py-3"><StatusPill value={claim.status} /></td>
-                <td className="px-4 py-3"><StatusPill value={claim.contract} /></td>
-                <td className="px-4 py-3"><StatusPill value={claim.coc} /></td>
+                <td className="px-4 py-3"><StatusPill value={project.invoiceStatus} /></td>
+                <td className="px-4 py-3"><StatusPill value={project.contractStatus} /></td>
+                <td className="px-4 py-3"><StatusPill value={project.cocStatus} /></td>
                 <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                  {claim.dateAdded ? new Date(claim.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '\u2014'}
+                  {project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '\u2014'}
                 </td>
                 <td className="px-4 py-3">
                   <Link
-                    to={`/projects/${claim.id}`}
+                    to={`/projects/${project.id}`}
                     className="inline-flex items-center rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-foreground shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
                   >
                     View

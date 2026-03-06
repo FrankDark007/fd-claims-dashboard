@@ -29,10 +29,25 @@ const CATEGORY_CONFIG = {
     icon: DocumentCheckIcon,
     color: 'bg-green-50 text-green-700',
   },
+  drylogs: {
+    label: 'Dry Logs',
+    icon: DocumentTextIcon,
+    color: 'bg-cyan-50 text-cyan-700',
+  },
+  invoices: {
+    label: 'Invoices',
+    icon: DocumentTextIcon,
+    color: 'bg-violet-50 text-violet-700',
+  },
   photos: {
     label: 'Photos',
     icon: PhotoIcon,
     color: 'bg-amber-50 text-amber-700',
+  },
+  correspondence: {
+    label: 'Correspondence',
+    icon: DocumentTextIcon,
+    color: 'bg-indigo-50 text-indigo-700',
   },
   other: {
     label: 'Other Documents',
@@ -67,29 +82,22 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
   }, {})
 
   const handleDownload = async (file: ProjectFile) => {
-    // Download via authenticated API and trigger browser download
     const res = await fetch(`/api/projects/${projectId}/files?fileId=${file.id}&download=1`, {
       headers: { Authorization: `Bearer ${token}` },
     })
-    // For now, create a share link and open it (simplest approach without separate download endpoint)
-    // Actually, let's create a temporary share link for download
-    try {
-      const shareRes = await fetch(`/api/projects/${projectId}/share`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ fileId: file.id, expiresInHours: 1 }),
-      })
-      if (shareRes.ok) {
-        const data = await shareRes.json() as { shareUrl: string }
-        window.open(data.shareUrl, '_blank')
-      }
-    } catch {
-      // Fallback: ignore the initial res
-      void res
+    if (!res.ok) {
+      return
     }
+
+    const blob = await res.blob()
+    const href = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = href
+    link.download = file.originalName
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(href)
   }
 
   const handleDelete = async (fileId: string) => {
@@ -108,7 +116,7 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
     }
   }
 
-  const categories = ['contracts', 'cocs', 'photos', 'other'] as const
+  const categories = ['contracts', 'cocs', 'drylogs', 'invoices', 'photos', 'correspondence', 'other'] as const
 
   return (
     <>
@@ -138,9 +146,9 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{file.name}</p>
+                      <p className="truncate text-sm font-medium text-gray-900">{file.originalName}</p>
                       <p className="text-xs text-gray-500">
-                        {formatSize(file.size)} &middot; {formatDate(file.uploadedAt)} &middot; {file.uploadedBy}
+                        {formatSize(file.sizeBytes)} &middot; {formatDate(file.uploadedAt)} &middot; {file.uploadedBy}
                       </p>
                     </div>
 
@@ -153,7 +161,7 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
                         <ArrowDownTrayIcon className="size-4" />
                       </button>
                       <button
-                        onClick={() => setShareFile({ id: file.id, name: file.name })}
+                        onClick={() => setShareFile({ id: file.id, name: file.originalName })}
                         className="rounded p-1.5 text-gray-400 hover:bg-gray-100 hover:text-blue-600"
                         title="Share"
                       >

@@ -1,6 +1,4 @@
-interface Env {
-  FD_PROJECTS_DATA: KVNamespace
-}
+import { getProjectFileById } from '../../_shared/project-store'
 
 interface ShareToken {
   token: string
@@ -12,6 +10,11 @@ interface ShareToken {
   createdAt: string
   expiresAt: string
   createdBy: string
+}
+
+interface Env {
+  FD_CLAIMS_DB: D1Database
+  FD_LIGHT_STATE: KVNamespace
 }
 
 // POST /api/projects/:id/share — create a share token for a file
@@ -30,11 +33,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'fileId required' }, { status: 400 })
   }
 
-  // Look up the file metadata
-  const filesJson = await context.env.FD_PROJECTS_DATA.get(`project:${projectId}:files`)
-  const files = filesJson ? JSON.parse(filesJson) : []
-  const file = files.find((f: { id: string }) => f.id === body.fileId)
-
+  const file = await getProjectFileById(context.env.FD_CLAIMS_DB, projectId, body.fileId)
   if (!file) {
     return Response.json({ error: 'File not found' }, { status: 404 })
   }
@@ -48,7 +47,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     token,
     projectId,
     fileId: body.fileId,
-    fileName: file.name,
+    fileName: file.originalName,
     r2Key: file.r2Key,
     mimeType: file.mimeType,
     createdAt: now.toISOString(),
@@ -57,7 +56,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // Store in KV with TTL
-  await context.env.FD_PROJECTS_DATA.put(
+  await context.env.FD_LIGHT_STATE.put(
     `share:${token}`,
     JSON.stringify(shareToken),
     { expirationTtl: expiresInHours * 60 * 60 }

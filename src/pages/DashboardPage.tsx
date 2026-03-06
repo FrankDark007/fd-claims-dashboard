@@ -1,5 +1,5 @@
-import type { Claim } from '../types/claim'
-import { computeStats, computeAging } from '../hooks/useNotionData'
+import type { Project } from '../types/claim'
+import { computeStats, computeAging } from '../hooks/useProjects'
 import StatsCard from '../components/StatsCard'
 import InvoiceAgingCard from '../components/InvoiceAgingCard'
 import ProjectListItem from '../components/ProjectListItem'
@@ -11,13 +11,13 @@ import {
 } from '@heroicons/react/24/outline'
 
 interface DashboardPageProps {
-  claims: Claim[]
+  projects: Project[]
   loading: boolean
 }
 
-export default function DashboardPage({ claims, loading }: DashboardPageProps) {
-  const stats = computeStats(claims)
-  const agingBuckets = computeAging(claims)
+export default function DashboardPage({ projects, loading }: DashboardPageProps) {
+  const stats = computeStats(projects)
+  const agingBuckets = computeAging(projects)
 
   if (loading) {
     return (
@@ -39,7 +39,7 @@ export default function DashboardPage({ claims, loading }: DashboardPageProps) {
         <StatsCard
           title="Active Projects"
           value={stats.activeCount}
-          subtitle={`${stats.totalClaims} total`}
+          subtitle={`${stats.totalProjects} total`}
           color="blue"
           icon={<DocumentTextIcon className="size-6 text-white" />}
           linkText="View all"
@@ -78,13 +78,13 @@ export default function DashboardPage({ claims, loading }: DashboardPageProps) {
         <h2 className="mb-4 text-lg font-semibold text-foreground">Recent Projects</h2>
         <div className="overflow-hidden rounded-lg bg-white shadow">
           <ul role="list" className="divide-y divide-gray-200">
-            {claims.slice(0, 10).map((claim) => (
-              <li key={claim.id}>
-                <ProjectListItem project={claim} />
+            {projects.slice(0, 10).map((project) => (
+              <li key={project.id}>
+                <ProjectListItem project={project} />
               </li>
             ))}
           </ul>
-          {claims.length === 0 && (
+          {projects.length === 0 && (
             <div className="py-12 text-center text-muted">No projects yet</div>
           )}
         </div>

@@ -1,17 +1,9 @@
-interface Env {
-  FD_PROJECT_FILES: R2Bucket
-  FD_PROJECTS_DATA: KVNamespace
-}
+import { createProjectFile, deleteProjectFile, getProjectById, getProjectFileById, listProjectFiles } from '../../_shared/project-store'
+import { normalizeFileCategory } from '../../../../src/shared/projects'
 
-interface FileMetadata {
-  id: string
-  name: string
-  r2Key: string
-  category: 'contracts' | 'cocs' | 'photos' | 'other'
-  size: number
-  mimeType: string
-  uploadedAt: string
-  uploadedBy: string
+interface Env {
+  FD_CLAIMS_DB: D1Database
+  FD_PROJECT_FILES: R2Bucket
 }
 
 // GET /api/projects/:id/files — list all files for a project
@@ -21,9 +13,29 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Project ID required' }, { status: 400 })
   }
 
-  const filesJson = await context.env.FD_PROJECTS_DATA.get(`project:${projectId}:files`)
-  const files: FileMetadata[] = filesJson ? JSON.parse(filesJson) : []
+  const url = new URL(context.request.url)
+  const download = url.searchParams.get('download') === '1'
+  const fileId = url.searchParams.get('fileId')
 
+  if (download && fileId) {
+    const file = await getProjectFileById(context.env.FD_CLAIMS_DB, projectId, fileId)
+    if (!file) {
+      return Response.json({ error: 'File not found' }, { status: 404 })
+    }
+
+    const object = await context.env.FD_PROJECT_FILES.get(file.r2Key)
+    if (!object) {
+      return Response.json({ error: 'File object missing from storage' }, { status: 404 })
+    }
+
+    const headers = new Headers()
+    headers.set('Content-Type', file.mimeType || 'application/octet-stream')
+    headers.set('Content-Disposition', `attachment; filename="${file.originalName}"`)
+
+    return new Response(object.body, { headers })
+  }
+
+  const files = await listProjectFiles(context.env.FD_CLAIMS_DB, projectId)
   return Response.json({ files })
 }
 
@@ -34,17 +46,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Project ID required' }, { status: 400 })
   }
 
+  const project = await getProjectById(context.env.FD_CLAIMS_DB, projectId)
+  if (!project) {
+    return Response.json({ error: 'Project not found' }, { status: 404 })
+  }
+
   const formData = await context.request.formData()
   const file = formData.get('file') as File | null
-  const category = (formData.get('category') as string) || 'other'
+  const category = normalizeFileCategory(formData.get('category'))
 
   if (!file) {
     return Response.json({ error: 'No file provided' }, { status: 400 })
-  }
-
-  const validCategories = ['contracts', 'cocs', 'photos', 'other']
-  if (!validCategories.includes(category)) {
-    return Response.json({ error: `Invalid category. Must be one of: ${validCategories.join(', ')}` }, { status: 400 })
   }
 
   // 50MB limit
@@ -53,7 +65,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   const fileId = crypto.randomUUID()
-  const r2Key = `projects/${projectId}/${category}/${fileId}-${file.name}`
+  const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]+/g, '-')
+  const r2Key = `projects/${projectId}/${category}/${fileId}-${safeFilename || 'file'}`
 
   // Upload to R2
   await context.env.FD_PROJECT_FILES.put(r2Key, file.stream(), {
@@ -62,29 +75,22 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     },
     customMetadata: {
       projectId,
-      category,
+      category: category,
       originalName: file.name,
       uploadedBy: context.request.headers.get('X-User-Display') || 'Unknown',
     },
   })
 
-  // Update KV metadata
-  const filesJson = await context.env.FD_PROJECTS_DATA.get(`project:${projectId}:files`)
-  const files: FileMetadata[] = filesJson ? JSON.parse(filesJson) : []
-
-  const newFile: FileMetadata = {
-    id: fileId,
-    name: file.name,
+  const newFile = await createProjectFile(context.env.FD_CLAIMS_DB, {
+    projectId,
+    filename: safeFilename || file.name,
+    originalName: file.name,
     r2Key,
-    category: category as FileMetadata['category'],
-    size: file.size,
+    category,
+    sizeBytes: file.size,
     mimeType: file.type || 'application/octet-stream',
-    uploadedAt: new Date().toISOString(),
     uploadedBy: context.request.headers.get('X-User-Display') || 'Unknown',
-  }
-
-  files.push(newFile)
-  await context.env.FD_PROJECTS_DATA.put(`project:${projectId}:files`, JSON.stringify(files))
+  })
 
   return Response.json({ file: newFile }, { status: 201 })
 }
@@ -99,22 +105,13 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     return Response.json({ error: 'Project ID and fileId required' }, { status: 400 })
   }
 
-  const filesJson = await context.env.FD_PROJECTS_DATA.get(`project:${projectId}:files`)
-  const files: FileMetadata[] = filesJson ? JSON.parse(filesJson) : []
-
-  const fileIndex = files.findIndex(f => f.id === fileId)
-  if (fileIndex === -1) {
+  const file = await deleteProjectFile(context.env.FD_CLAIMS_DB, projectId, fileId)
+  if (!file) {
     return Response.json({ error: 'File not found' }, { status: 404 })
   }
 
-  const file = files[fileIndex]
-
   // Delete from R2
   await context.env.FD_PROJECT_FILES.delete(file.r2Key)
-
-  // Remove from KV metadata
-  files.splice(fileIndex, 1)
-  await context.env.FD_PROJECTS_DATA.put(`project:${projectId}:files`, JSON.stringify(files))
 
   return Response.json({ success: true })
 }

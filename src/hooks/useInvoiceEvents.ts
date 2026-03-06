@@ -4,10 +4,11 @@ export interface InvoiceEventWithProject {
   id: string
   projectId: string
   type: 'sent' | 'reminder' | 'paid' | 'disputed'
-  date: string
+  eventDate: string
   amount: number
   notes: string
   createdBy: string
+  recipient?: string
 }
 
 export function useInvoiceEvents(token: string) {

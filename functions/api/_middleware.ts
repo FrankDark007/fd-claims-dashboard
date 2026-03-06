@@ -36,12 +36,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   headers.set('X-User-Name', session.username)
   headers.set('X-User-Display', session.displayName)
   headers.set('X-User-Role', session.role)
+  headers.set('X-User-Email', session.email || '')
 
   // Create new request with user headers
   const newRequest = new Request(context.request.url, {
     method: context.request.method,
     headers,
-    body: context.request.body,
+    body: context.request.method === 'GET' || context.request.method === 'HEAD'
+      ? undefined
+      : context.request.body,
   })
 
   // Replace the request in context

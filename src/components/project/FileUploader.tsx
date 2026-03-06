@@ -10,7 +10,10 @@ interface FileUploaderProps {
 const CATEGORIES = [
   { value: 'contracts', label: 'Contracts' },
   { value: 'cocs', label: 'Certificates of Completion' },
+  { value: 'drylogs', label: 'Dry Logs' },
+  { value: 'invoices', label: 'Invoices' },
   { value: 'photos', label: 'Photos' },
+  { value: 'correspondence', label: 'Correspondence' },
   { value: 'other', label: 'Other Documents' },
 ] as const
 

@@ -7,16 +7,18 @@ binding = "FD_CLAIMS_USERS"
 id = "b2ed4696a8184c43a3e6c5f9d6b20af9"
 
 [[kv_namespaces]]
-binding = "FD_PROJECTS_DATA"
+binding = "FD_LIGHT_STATE"
 id = "18281eb24d2a4be2bdb52ac0ef39fa23"
 
-# Uncomment after enabling R2 in Cloudflare Dashboard:
-#   1. Go to dash.cloudflare.com → R2 → Enable
-#   2. npx wrangler r2 bucket create fd-project-files
-#   3. Uncomment the block below and redeploy
-# [[r2_buckets]]
-# binding = "FD_PROJECT_FILES"
-# bucket_name = "fd-project-files"
+[[d1_databases]]
+binding = "FD_CLAIMS_DB"
+database_name = "fd-claims-dashboard"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+preview_database_id = "REPLACE_WITH_D1_PREVIEW_DATABASE_ID"
+
+[[r2_buckets]]
+binding = "FD_PROJECT_FILES"
+bucket_name = "fd-project-files"
 
 [vars]
-NOTION_DATABASE_ID = "3a496fa362994550910a04937d747166"
+GOOGLE_CLIENT_ID = ""

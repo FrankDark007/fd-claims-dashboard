@@ -5,11 +5,10 @@ import {
   ArrowLeftIcon,
   ChevronDownIcon,
   LinkIcon,
-  PencilIcon,
   CameraIcon,
 } from '@heroicons/react/20/solid'
-import type { Claim } from '../types/claim'
-import { useProjectData } from '../hooks/useProject'
+import type { Project } from '../types/claim'
+import { useProject, useProjectData } from '../hooks/useProject'
 import StatusPill from '../components/StatusPill'
 import OverviewTab from '../components/project/OverviewTab'
 import ProgressTracker from '../components/project/ProgressTracker'
@@ -18,7 +17,7 @@ import TimelineTab from '../components/project/TimelineTab'
 import EmailTab from '../components/project/EmailTab'
 
 interface ProjectDetailPageProps {
-  claims: Claim[]
+  projects: Project[]
   token: string
 }
 
@@ -29,11 +28,20 @@ const tabs = [
   { name: 'Email', id: 'email' },
 ]
 
-export default function ProjectDetailPage({ claims, token }: ProjectDetailPageProps) {
+export default function ProjectDetailPage({ projects, token }: ProjectDetailPageProps) {
   const { id } = useParams<{ id: string }>()
-  const project = claims.find(c => c.id === id)
+  const { project: hydratedProject, loading: projectLoading } = useProject(id, token)
+  const project = hydratedProject ?? projects.find((candidate) => candidate.id === id)
   const { data, loading: dataLoading, refetch } = useProjectData(id, token)
   const [activeTab, setActiveTab] = useState('overview')
+
+  if (!project && projectLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
 
   if (!project) {
     return (
@@ -62,9 +70,9 @@ export default function ProjectDetailPage({ claims, token }: ProjectDetailPagePr
             {project.clientName}
           </h2>
           <div className="mt-1 flex flex-col sm:mt-0 sm:flex-row sm:flex-wrap sm:space-x-6">
-            {project.project && (
+            {project.projectName && (
               <div className="mt-2 flex items-center text-sm text-secondary">
-                {project.project}
+                {project.projectName}
               </div>
             )}
             {project.projectType && (
@@ -85,27 +93,15 @@ export default function ProjectDetailPage({ claims, token }: ProjectDetailPagePr
               </div>
             )}
             <div className="mt-2">
-              <StatusPill value={project.status} size="md" />
+              <StatusPill value={project.invoiceStatus} size="md" />
             </div>
           </div>
         </div>
         <div className="mt-5 flex lg:ml-4 lg:mt-0">
-          <span className="hidden sm:block">
-            <a
-              href={project.notionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-            >
-              <PencilIcon aria-hidden="true" className="-ml-0.5 mr-1.5 size-5 text-gray-400" />
-              Edit in Notion
-            </a>
-          </span>
-
-          {project.companyCam && (
+          {project.companyCamUrl && (
             <span className="ml-3 hidden sm:block">
               <a
-                href={project.companyCam}
+                href={project.companyCamUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
@@ -116,10 +112,10 @@ export default function ProjectDetailPage({ claims, token }: ProjectDetailPagePr
             </span>
           )}
 
-          {project.driveFolder && (
+          {project.driveFolderUrl && (
             <span className="ml-3 hidden sm:block">
               <a
-                href={project.driveFolder}
+                href={project.driveFolderUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center rounded-md bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-sm ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
@@ -140,21 +136,16 @@ export default function ProjectDetailPage({ claims, token }: ProjectDetailPagePr
               transition
               className="absolute right-0 z-10 mt-2 w-36 origin-top-right rounded-md bg-white py-1 shadow-lg outline outline-1 outline-black/5 transition data-[closed]:scale-95 data-[closed]:transform data-[closed]:opacity-0 data-[enter]:duration-200 data-[leave]:duration-75 data-[enter]:ease-out data-[leave]:ease-in"
             >
-              <MenuItem>
-                <a href={project.notionUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-gray-700 data-[focus]:bg-gray-100">
-                  Edit in Notion
-                </a>
-              </MenuItem>
-              {project.companyCam && (
+              {project.companyCamUrl && (
                 <MenuItem>
-                  <a href={project.companyCam} target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-gray-700 data-[focus]:bg-gray-100">
+                  <a href={project.companyCamUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-gray-700 data-[focus]:bg-gray-100">
                     CompanyCam
                   </a>
                 </MenuItem>
               )}
-              {project.driveFolder && (
+              {project.driveFolderUrl && (
                 <MenuItem>
-                  <a href={project.driveFolder} target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-gray-700 data-[focus]:bg-gray-100">
+                  <a href={project.driveFolderUrl} target="_blank" rel="noopener noreferrer" className="block px-4 py-2 text-sm text-gray-700 data-[focus]:bg-gray-100">
                     Drive Folder
                   </a>
                 </MenuItem>

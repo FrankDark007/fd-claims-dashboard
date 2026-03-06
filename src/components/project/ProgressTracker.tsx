@@ -1,8 +1,8 @@
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
-import type { Claim } from '../../types/claim'
+import type { Project } from '../../types/claim'
 
 interface ProgressTrackerProps {
-  project: Claim
+  project: Project
 }
 
 interface Step {
@@ -10,41 +10,41 @@ interface Step {
   status: 'complete' | 'current' | 'upcoming'
 }
 
-function getSteps(project: Claim): Step[] {
+function getSteps(project: Project): Step[] {
   const steps: Step[] = []
 
   // Contract
-  if (project.contract === 'Signed') {
+  if (project.contractStatus === 'Signed') {
     steps.push({ name: 'Contract Signed', status: 'complete' })
-  } else if (project.contract === 'Requested') {
+  } else if (project.contractStatus === 'Requested') {
     steps.push({ name: 'Contract Requested', status: 'current' })
   } else {
     steps.push({ name: 'Contract', status: 'upcoming' })
   }
 
   // COC
-  if (project.coc === 'Signed') {
+  if (project.cocStatus === 'Signed') {
     steps.push({ name: 'COC Signed', status: 'complete' })
-  } else if (project.coc === 'Requested') {
+  } else if (project.cocStatus === 'Requested') {
     steps.push({ name: 'COC Requested', status: 'current' })
   } else {
     steps.push({ name: 'COC', status: steps[0].status === 'complete' ? 'current' : 'upcoming' })
   }
 
   // Invoice
-  if (project.finalInvoice === 'Complete') {
+  if (project.finalInvoiceStatus === 'Complete') {
     steps.push({ name: 'Invoice Complete', status: 'complete' })
-  } else if (project.finalInvoice === 'Review' || project.finalInvoice === 'Drafting') {
-    steps.push({ name: `Invoice ${project.finalInvoice}`, status: 'current' })
+  } else if (project.finalInvoiceStatus === 'Review' || project.finalInvoiceStatus === 'Drafting') {
+    steps.push({ name: `Invoice ${project.finalInvoiceStatus}`, status: 'current' })
   } else {
     steps.push({ name: 'Invoice', status: steps[1].status === 'complete' ? 'current' : 'upcoming' })
   }
 
   // Payment
-  if (project.status === 'Paid') {
+  if (project.invoiceStatus === 'Paid') {
     steps.push({ name: 'Paid', status: 'complete' })
-  } else if (project.status === 'Sent' || project.status === 'Overdue') {
-    steps.push({ name: project.status === 'Overdue' ? 'Overdue' : 'Invoice Sent', status: 'current' })
+  } else if (project.invoiceStatus === 'Sent' || project.invoiceStatus === 'Overdue') {
+    steps.push({ name: project.invoiceStatus === 'Overdue' ? 'Overdue' : 'Invoice Sent', status: 'current' })
   } else {
     steps.push({ name: 'Payment', status: steps[2].status === 'complete' ? 'current' : 'upcoming' })
   }

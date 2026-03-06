@@ -43,7 +43,7 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
     setError(null)
 
     try {
-      const res = await fetch('/api/projects/create', {
+      const res = await fetch('/api/projects', {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -51,13 +51,13 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
         },
         body: JSON.stringify({
           clientName: clientName.trim(),
-          project: project.trim() || undefined,
+          projectName: project.trim() || undefined,
           projectType: projectType || undefined,
           amount: amount ? parseFloat(amount) : undefined,
           xactimateNumber: xactimateNumber.trim() || undefined,
           notes: notes.trim() || undefined,
-          companyCam: companyCam.trim() || undefined,
-          driveFolder: driveFolder.trim() || undefined,
+          companyCamUrl: companyCam.trim() || undefined,
+          driveFolderUrl: driveFolder.trim() || undefined,
         }),
       })
 

@@ -1,12 +1,12 @@
 import { useState, Fragment } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
-import type { Claim } from '../../types/claim'
+import type { Project } from '../../types/claim'
 
 interface AddInvoiceEventModalProps {
   open: boolean
   onClose: () => void
-  projects: Claim[]
+  projects: Project[]
   preselectedProjectId?: string
   preselectedDate?: string
   onSubmit: (params: {
@@ -133,7 +133,7 @@ export default function AddInvoiceEventModal({
                         .sort((a, b) => a.clientName.localeCompare(b.clientName))
                         .map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.clientName} {p.project ? `— ${p.project}` : ''} {p.amount ? `($${p.amount.toLocaleString()})` : ''}
+                            {p.clientName} {p.projectName ? `— ${p.projectName}` : ''} {p.amount ? `($${p.amount.toLocaleString()})` : ''}
                           </option>
                         ))}
                     </select>

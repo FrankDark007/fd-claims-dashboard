@@ -1,9 +1,9 @@
 import { Link } from 'react-router-dom'
-import type { Claim } from '../types/claim'
+import type { Project } from '../types/claim'
 import StatusPill from './StatusPill'
 
 interface ProjectListItemProps {
-  project: Claim
+  project: Project
 }
 
 const typeColors: Record<string, string> = {
@@ -12,25 +12,25 @@ const typeColors: Record<string, string> = {
   'Mold Remediation': 'bg-red-100 text-red-700',
 }
 
-function getProgress(project: Claim): { percent: number; label: string } {
+function getProgress(project: Project): { percent: number; label: string } {
   let steps = 0
   let done = 0
 
   // Contract
   steps++
-  if (project.contract === 'Signed') done++
+  if (project.contractStatus === 'Signed') done++
 
   // COC
   steps++
-  if (project.coc === 'Signed') done++
+  if (project.cocStatus === 'Signed') done++
 
   // Final Invoice
   steps++
-  if (project.finalInvoice === 'Complete') done++
+  if (project.finalInvoiceStatus === 'Complete') done++
 
   // Payment
   steps++
-  if (project.status === 'Paid') done++
+  if (project.invoiceStatus === 'Paid') done++
 
   const percent = Math.round((done / steps) * 100)
   const labels = ['Contract', 'COC', 'Invoice', 'Paid']
@@ -64,15 +64,15 @@ export default function ProjectListItem({ project }: ProjectListItemProps) {
                 ${project.amount.toLocaleString()}
               </span>
             )}
-            <StatusPill value={project.status} />
+            <StatusPill value={project.invoiceStatus} />
           </div>
         </div>
         <div className="mt-2 flex items-center justify-between">
           <div className="flex items-center gap-4 text-sm text-muted">
-            <span>{project.project || '\u2014'}</span>
-            {project.dateAdded && (
+            <span>{project.projectName || '\u2014'}</span>
+            {project.createdAt && (
               <span>
-                {new Date(project.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </span>
             )}
           </div>

@@ -1,6 +1,6 @@
 interface Env {
   FD_PROJECT_FILES: R2Bucket
-  FD_PROJECTS_DATA: KVNamespace
+  FD_LIGHT_STATE: KVNamespace
 }
 
 interface ShareToken {
@@ -23,7 +23,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 
   // Look up share token in KV
-  const shareJson = await context.env.FD_PROJECTS_DATA.get(`share:${token}`)
+  const shareJson = await context.env.FD_LIGHT_STATE.get(`share:${token}`)
   if (!shareJson) {
     return new Response('Share link expired or invalid', { status: 404 })
   }
@@ -32,7 +32,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
   // Check expiration (belt & suspenders — KV TTL should handle this)
   if (new Date(share.expiresAt) < new Date()) {
-    await context.env.FD_PROJECTS_DATA.delete(`share:${token}`)
+    await context.env.FD_LIGHT_STATE.delete(`share:${token}`)
     return new Response('Share link has expired', { status: 410 })
   }
 

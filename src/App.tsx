@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { useClaims } from './hooks/useNotionData'
+import { useProjects } from './hooks/useProjects'
 import { useAuth } from './hooks/useAuth'
 import type { User } from './types/claim'
 import AppShell from './components/AppShell'
@@ -13,6 +13,14 @@ import CalendarPage from './pages/CalendarPage'
 function App() {
   const auth = useAuth()
 
+  if (auth.initializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    )
+  }
+
   if (!auth.isAuthenticated) {
     return <LoginPage onLogin={auth.login} onGoogleLogin={auth.googleLogin} loading={auth.loading} error={auth.error} />
   }
@@ -25,7 +33,7 @@ function App() {
 }
 
 function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User; onLogout: () => void }) {
-  const { claims, loading, error, refetch } = useClaims(token)
+  const { projects, loading, error, refetch } = useProjects(token)
 
   return (
     <AppShell user={user} onLogout={onLogout}>
@@ -35,10 +43,10 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
         </div>
       )}
       <Routes>
-        <Route path="/" element={<DashboardPage claims={claims} loading={loading} />} />
-        <Route path="/projects" element={<ProjectsPage claims={claims} loading={loading} token={token} onRefresh={refetch} />} />
-        <Route path="/projects/:id" element={<ProjectDetailPage claims={claims} token={token} />} />
-        <Route path="/calendar" element={<CalendarPage claims={claims} token={token} />} />
+        <Route path="/" element={<DashboardPage projects={projects} loading={loading} />} />
+        <Route path="/projects" element={<ProjectsPage projects={projects} loading={loading} token={token} onRefresh={refetch} />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage projects={projects} token={token} />} />
+        <Route path="/calendar" element={<CalendarPage projects={projects} token={token} />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
         {user.role === 'admin' && (
           <Route path="/users" element={<UsersPage token={token} />} />

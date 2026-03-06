@@ -1,8 +1,8 @@
-import type { Claim } from '../../types/claim'
+import type { Project } from '../../types/claim'
 import StatusPill from '../StatusPill'
 
 interface OverviewTabProps {
-  project: Claim
+  project: Project
 }
 
 export default function OverviewTab({ project }: OverviewTabProps) {
@@ -10,12 +10,12 @@ export default function OverviewTab({ project }: OverviewTabProps) {
     <div className="rounded-lg bg-white shadow">
       <div className="px-4 py-5 sm:px-6">
         <h3 className="text-base/7 font-semibold text-foreground">Project Information</h3>
-        <p className="mt-1 max-w-2xl text-sm/6 text-secondary">Details from Notion database.</p>
+        <p className="mt-1 max-w-2xl text-sm/6 text-secondary">Operational record stored in the dashboard.</p>
       </div>
       <div className="border-t border-gray-100">
         <dl className="divide-y divide-gray-100">
           <Row label="Client Name" value={project.clientName} />
-          <Row label="Project" value={project.project || '—'} />
+          <Row label="Project" value={project.projectName || '—'} />
           <Row label="Project Type">
             {project.projectType ? (
               <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
@@ -28,41 +28,58 @@ export default function OverviewTab({ project }: OverviewTabProps) {
             ) : '—'}
           </Row>
           <Row label="Invoice ID" value={project.invoiceId ? `#${project.invoiceId}` : '—'} />
+          <Row label="Project Status">
+            <StatusPill value={project.projectStatus} size="md" />
+          </Row>
           <Row label="Xactimate #" value={project.xactimateNumber || '—'} />
+          <Row label="Claim #" value={project.claimNumber || '—'} />
+          <Row label="Carrier" value={project.carrier || '—'} />
           <Row label="Amount" value={project.amount ? `$${project.amount.toLocaleString()}` : '—'} />
           <Row label="Invoice Status">
-            <StatusPill value={project.status} size="md" />
+            <StatusPill value={project.invoiceStatus} size="md" />
           </Row>
           <Row label="Contract">
-            <StatusPill value={project.contract} size="md" />
+            <StatusPill value={project.contractStatus} size="md" />
           </Row>
           <Row label="Certificate of Completion">
-            <StatusPill value={project.coc} size="md" />
+            <StatusPill value={project.cocStatus} size="md" />
           </Row>
           <Row label="Final Invoice">
-            <StatusPill value={project.finalInvoice} size="md" />
+            <StatusPill value={project.finalInvoiceStatus} size="md" />
+          </Row>
+          <Row label="Dry Log">
+            <StatusPill value={project.drylogStatus} size="md" />
           </Row>
           <Row label="Rewrite Status">
             <StatusPill value={project.rewriteStatus} size="md" />
           </Row>
           <Row label="Matterport">
-            <StatusPill value={project.matterport} size="md" />
+            <StatusPill value={project.matterportStatus} size="md" />
           </Row>
+          <Row label="Project Manager" value={project.projectManagerName || '—'} />
+          <Row label="PM Email" value={project.pmEmail || '—'} />
+          <Row label="PM Phone" value={project.pmPhone || '—'} />
+          <Row label="Adjuster" value={project.adjusterName || '—'} />
+          <Row label="Adjuster Email" value={project.adjusterEmail || '—'} />
+          <Row label="Adjuster Phone" value={project.adjusterPhone || '—'} />
           <Row label="CompanyCam">
-            {project.companyCam ? (
-              <a href={project.companyCam} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover font-medium text-sm">
+            {project.companyCamUrl ? (
+              <a href={project.companyCamUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover font-medium text-sm">
                 Open CompanyCam
               </a>
             ) : '—'}
           </Row>
           <Row label="Drive Folder">
-            {project.driveFolder ? (
-              <a href={project.driveFolder} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover font-medium text-sm">
+            {project.driveFolderUrl ? (
+              <a href={project.driveFolderUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:text-primary-hover font-medium text-sm">
                 Open Google Drive
               </a>
             ) : '—'}
           </Row>
-          <Row label="Date Added" value={project.dateAdded ? new Date(project.dateAdded).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <Row label="Invoice Sent" value={project.invoiceSentDate ? new Date(project.invoiceSentDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <Row label="Due Date" value={project.dueDate ? new Date(project.dueDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <Row label="Payment Received" value={project.paymentReceivedDate ? new Date(project.paymentReceivedDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
+          <Row label="Created" value={project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '—'} />
           <Row label="Status">
             {project.done ? (
               <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">

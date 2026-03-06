@@ -42,19 +42,14 @@ interface AppShellProps {
   children: React.ReactNode
 }
 
-export default function AppShell({ user, onLogout, children }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const location = useLocation()
+interface SidebarContentProps {
+  allNav: typeof navigation
+  isCurrentPath: (href: string) => boolean
+  onNavigate: () => void
+}
 
-  const allNav = user.role === 'admin' ? [...navigation, ...adminNavigation] : navigation
-  const initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-
-  function isCurrentPath(href: string) {
-    if (href === '/') return location.pathname === '/'
-    return location.pathname.startsWith(href)
-  }
-
-  const SidebarContent = () => (
+function SidebarContent({ allNav, isCurrentPath, onNavigate }: SidebarContentProps) {
+  return (
     <>
       <div className="flex h-16 shrink-0 items-center gap-3">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
@@ -79,7 +74,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
                         : 'text-gray-400 hover:bg-white/5 hover:text-white',
                       'group flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold',
                     )}
-                    onClick={() => setSidebarOpen(false)}
+                    onClick={onNavigate}
                   >
                     <item.icon aria-hidden="true" className="size-6 shrink-0" />
                     {item.name}
@@ -92,7 +87,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
             <NavLink
               to="/settings"
               className="group -mx-2 flex gap-x-3 rounded-md p-2 text-sm/6 font-semibold text-gray-400 hover:bg-white/5 hover:text-white"
-              onClick={() => setSidebarOpen(false)}
+              onClick={onNavigate}
             >
               <Cog6ToothIcon aria-hidden="true" className="size-6 shrink-0" />
               Settings
@@ -102,6 +97,19 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
       </nav>
     </>
   )
+}
+
+export default function AppShell({ user, onLogout, children }: AppShellProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const location = useLocation()
+
+  const allNav = user.role === 'admin' ? [...navigation, ...adminNavigation] : navigation
+  const initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+
+  function isCurrentPath(href: string) {
+    if (href === '/') return location.pathname === '/'
+    return location.pathname.startsWith(href)
+  }
 
   return (
     <div>
@@ -125,7 +133,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
               </div>
             </TransitionChild>
             <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
-              <SidebarContent />
+              <SidebarContent allNav={allNav} isCurrentPath={isCurrentPath} onNavigate={() => setSidebarOpen(false)} />
             </div>
           </DialogPanel>
         </div>
@@ -134,7 +142,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
       {/* Desktop sidebar */}
       <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col">
         <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-gray-900 px-6 pb-4 ring-1 ring-white/10">
-          <SidebarContent />
+          <SidebarContent allNav={allNav} isCurrentPath={isCurrentPath} onNavigate={() => setSidebarOpen(false)} />
         </div>
       </div>
 

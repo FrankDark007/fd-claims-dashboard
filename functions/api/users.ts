@@ -14,6 +14,13 @@ interface UserRecord {
   createdAt: string
 }
 
+function toSafeUser(user: UserRecord): Omit<UserRecord, 'passwordHash' | 'salt'> {
+  const safeUser = { ...user }
+  delete safeUser.passwordHash
+  delete safeUser.salt
+  return safeUser
+}
+
 async function hashPassword(password: string, salt: string): Promise<string> {
   const encoder = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
@@ -48,9 +55,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     const json = await context.env.FD_CLAIMS_USERS.get(key.name)
     if (!json) continue
     const user = JSON.parse(json) as UserRecord
-    // Strip sensitive fields
-    const { passwordHash: _, salt: __, ...safe } = user
-    users.push(safe)
+    users.push(toSafeUser(user))
   }
 
   return Response.json({ users })
@@ -100,8 +105,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     await context.env.FD_CLAIMS_USERS.put(`user:${username}`, JSON.stringify(user))
 
-    const { passwordHash: _, salt: __, ...safe } = user
-    return Response.json({ user: safe }, { status: 201 })
+    return Response.json({ user: toSafeUser(user) }, { status: 201 })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error'
     return Response.json({ error: message }, { status: 500 })

@@ -1,9 +1,9 @@
 import { CheckCircleIcon } from '@heroicons/react/24/solid'
-import type { Claim } from '../../types/claim'
+import type { Project } from '../../types/claim'
 import type { InvoiceEvent } from '../../hooks/useProject'
 
 interface TimelineTabProps {
-  project: Claim
+  project: Project
   invoiceEvents: InvoiceEvent[]
 }
 
@@ -16,28 +16,28 @@ interface ActivityItem {
   isCompleted?: boolean
 }
 
-function buildTimeline(project: Claim, invoiceEvents: InvoiceEvent[]): ActivityItem[] {
+function buildTimeline(project: Project, invoiceEvents: InvoiceEvent[]): ActivityItem[] {
   const items: ActivityItem[] = []
 
   // Project creation
-  if (project.dateAdded) {
+  if (project.createdAt) {
     items.push({
       id: 'created',
       type: 'system',
       description: 'Project created',
-      date: project.dateAdded,
+      date: project.createdAt,
     })
   }
 
   // Status milestones
-  if (project.contract === 'Signed') {
-    items.push({ id: 'contract', type: 'status', description: 'Contract signed', date: project.dateAdded || '', isCompleted: true })
+  if (project.contractStatus === 'Signed') {
+    items.push({ id: 'contract', type: 'status', description: 'Contract signed', date: project.createdAt || '', isCompleted: true })
   }
-  if (project.coc === 'Signed') {
-    items.push({ id: 'coc', type: 'status', description: 'Certificate of Completion signed', date: project.dateAdded || '', isCompleted: true })
+  if (project.cocStatus === 'Signed') {
+    items.push({ id: 'coc', type: 'status', description: 'Certificate of Completion signed', date: project.createdAt || '', isCompleted: true })
   }
-  if (project.status === 'Paid') {
-    items.push({ id: 'paid', type: 'status', description: 'Invoice paid', date: project.dateAdded || '', isCompleted: true })
+  if (project.invoiceStatus === 'Paid') {
+    items.push({ id: 'paid', type: 'status', description: 'Invoice paid', date: project.paymentReceivedDate || project.updatedAt, isCompleted: true })
   }
 
   // Invoice events from KV
@@ -47,7 +47,7 @@ function buildTimeline(project: Claim, invoiceEvents: InvoiceEvent[]): ActivityI
       type: 'invoice',
       description: `Invoice ${event.type}: $${event.amount.toLocaleString()}${event.notes ? ` — ${event.notes}` : ''}`,
       person: event.createdBy,
-      date: event.date,
+      date: event.eventDate,
       isCompleted: event.type === 'paid',
     })
   }

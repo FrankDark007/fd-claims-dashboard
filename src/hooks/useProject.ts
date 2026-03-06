@@ -1,45 +1,47 @@
 import { useState, useEffect, useCallback } from 'react'
+import type { InvoiceEvent, Project, ProjectDataResponse, ProjectEmail, ProjectFile } from '../shared/projects'
 
-interface ProjectData {
-  files: ProjectFile[]
-  emails: ProjectEmail[]
-  invoiceEvents: InvoiceEvent[]
-}
+export type { InvoiceEvent, ProjectEmail, ProjectFile }
 
-export interface ProjectFile {
-  id: string
-  name: string
-  r2Key: string
-  category: 'contracts' | 'cocs' | 'photos' | 'other'
-  size: number
-  mimeType: string
-  uploadedAt: string
-  uploadedBy: string
-}
+export function useProject(projectId: string | undefined, token: string) {
+  const [project, setProject] = useState<Project | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-export interface ProjectEmail {
-  id: string
-  gmailMessageId: string
-  threadId: string
-  from: string
-  to: string
-  subject: string
-  body: string
-  date: string
-  direction: 'inbound' | 'outbound'
-}
+  const fetchProject = useCallback(async () => {
+    if (!projectId) {
+      setProject(null)
+      return
+    }
 
-export interface InvoiceEvent {
-  id: string
-  type: 'sent' | 'reminder' | 'paid' | 'disputed'
-  date: string
-  amount: number
-  notes: string
-  createdBy: string
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) {
+        throw new Error(`API error: ${res.status}`)
+      }
+
+      const json = await res.json() as { project: Project }
+      setProject(json.project)
+      setError(null)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load project')
+    } finally {
+      setLoading(false)
+    }
+  }, [projectId, token])
+
+  useEffect(() => {
+    fetchProject()
+  }, [fetchProject])
+
+  return { project, loading, error, refetch: fetchProject }
 }
 
 export function useProjectData(projectId: string | undefined, token: string) {
-  const [data, setData] = useState<ProjectData>({ files: [], emails: [], invoiceEvents: [] })
+  const [data, setData] = useState<ProjectDataResponse>({ files: [], emails: [], invoiceEvents: [] })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -51,7 +53,7 @@ export function useProjectData(projectId: string | undefined, token: string) {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(`API error: ${res.status}`)
-      const json = await res.json()
+      const json = await res.json() as ProjectDataResponse
       setData(json)
       setError(null)
     } catch (err: unknown) {

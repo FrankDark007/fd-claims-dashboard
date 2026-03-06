@@ -12,13 +12,13 @@ import {
   BellAlertIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
-import type { Claim } from '../types/claim'
+import type { Project } from '../types/claim'
 import type { InvoiceEventWithProject } from '../hooks/useInvoiceEvents'
 import { useInvoiceEvents } from '../hooks/useInvoiceEvents'
 import AddInvoiceEventModal from '../components/calendar/AddInvoiceEventModal'
 
 interface CalendarPageProps {
-  claims: Claim[]
+  projects: Project[]
   token: string
 }
 
@@ -39,7 +39,7 @@ interface DayData {
   isCurrentMonth: boolean
   isToday: boolean
   events: (InvoiceEventWithProject & { clientName?: string })[]
-  projectsAdded: Claim[]
+  projectsAdded: Project[]
 }
 
 function getDaysInMonth(year: number, month: number): DayData[] {
@@ -87,7 +87,7 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-export default function CalendarPage({ claims, token }: CalendarPageProps) {
+export default function CalendarPage({ projects, token }: CalendarPageProps) {
   const today = new Date()
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
@@ -103,18 +103,18 @@ export default function CalendarPage({ claims, token }: CalendarPageProps) {
     // Build lookup maps
     const eventsByDate = new Map<string, (InvoiceEventWithProject & { clientName?: string })[]>()
     for (const event of events) {
-      const dateKey = event.date.split('T')[0]
+      const dateKey = event.eventDate.split('T')[0]
       if (!eventsByDate.has(dateKey)) eventsByDate.set(dateKey, [])
-      const project = claims.find(c => c.id === event.projectId)
+      const project = projects.find((candidate) => candidate.id === event.projectId)
       eventsByDate.get(dateKey)!.push({ ...event, clientName: project?.clientName })
     }
 
-    const projectsByDate = new Map<string, Claim[]>()
-    for (const claim of claims) {
-      if (claim.dateAdded) {
-        const dateKey = claim.dateAdded.split('T')[0]
+    const projectsByDate = new Map<string, Project[]>()
+    for (const project of projects) {
+      if (project.createdAt) {
+        const dateKey = project.createdAt.split('T')[0]
         if (!projectsByDate.has(dateKey)) projectsByDate.set(dateKey, [])
-        projectsByDate.get(dateKey)!.push(claim)
+        projectsByDate.get(dateKey)!.push(project)
       }
     }
 
@@ -125,12 +125,12 @@ export default function CalendarPage({ claims, token }: CalendarPageProps) {
     }
 
     return baseDays
-  }, [currentYear, currentMonth, events, claims])
+  }, [currentYear, currentMonth, events, projects])
 
   // Month summary stats
   const monthEvents = useMemo(() => {
     return events.filter(e => {
-      const d = new Date(e.date)
+      const d = new Date(e.eventDate)
       return d.getFullYear() === currentYear && d.getMonth() === currentMonth
     })
   }, [events, currentYear, currentMonth])
@@ -353,7 +353,7 @@ export default function CalendarPage({ claims, token }: CalendarPageProps) {
                   {events.slice(0, 20).map((event) => {
                     const config = EVENT_TYPE_CONFIG[event.type]
                     const Icon = config.icon
-                    const project = claims.find(c => c.id === event.projectId)
+                    const project = projects.find((candidate) => candidate.id === event.projectId)
 
                     return (
                       <li key={event.id} className="flex items-center gap-4 px-4 py-3">
@@ -378,7 +378,7 @@ export default function CalendarPage({ claims, token }: CalendarPageProps) {
                           </div>
                           <p className="text-xs text-gray-500">
                             ${event.amount.toLocaleString()} &middot;{' '}
-                            {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                             {event.notes && ` — ${event.notes}`}
                           </p>
                         </div>
@@ -399,7 +399,7 @@ export default function CalendarPage({ claims, token }: CalendarPageProps) {
       <AddInvoiceEventModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        projects={claims}
+        projects={projects}
         preselectedDate={selectedDate}
         onSubmit={handleAddEvent}
       />

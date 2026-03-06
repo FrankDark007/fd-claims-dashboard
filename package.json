@@ -4,9 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"vite\" \"tsx server/api.ts\"",
+    "dev": "concurrently \"vite\" \"npm:dev:api\"",
     "dev:client": "vite",
-    "dev:server": "tsx server/api.ts",
+    "dev:api": "wrangler d1 migrations apply FD_CLAIMS_DB --local && wrangler pages dev ./public --proxy 5174 --port 3002 --d1 FD_CLAIMS_DB --kv FD_CLAIMS_USERS --kv FD_LIGHT_STATE --r2 FD_PROJECT_FILES --persist-to .wrangler/state --log-level warn",
+    "dev:server": "npm run dev:api",
+    "migrate:local": "wrangler d1 migrations apply FD_CLAIMS_DB --local",
+    "migrate:remote": "wrangler d1 migrations apply FD_CLAIMS_DB --remote",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
