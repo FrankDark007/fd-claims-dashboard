@@ -42,7 +42,17 @@ interface DayData {
   isCurrentMonth: boolean
   isToday: boolean
   events: (InvoiceEventWithProject & { clientName?: string })[]
+  followUps: FollowUpCalendarItem[]
   projectsAdded: Project[]
+}
+
+interface FollowUpCalendarItem {
+  projectId: string
+  clientName: string
+  projectName: string
+  date: string
+  kind: 'follow_up' | 'due_date'
+  invoiceStatus: Project['invoiceStatus']
 }
 
 function getDaysInMonth(year: number, month: number): DayData[] {
@@ -60,14 +70,14 @@ function getDaysInMonth(year: number, month: number): DayData[] {
   for (let i = startOffset - 1; i >= 0; i--) {
     const d = new Date(year, month, -i)
     const dateStr = formatDateStr(d)
-    days.push({ date: d, dateStr, isCurrentMonth: false, isToday: dateStr === todayStr, events: [], projectsAdded: [] })
+    days.push({ date: d, dateStr, isCurrentMonth: false, isToday: dateStr === todayStr, events: [], followUps: [], projectsAdded: [] })
   }
 
   // Current month
   for (let i = 1; i <= totalDays; i++) {
     const d = new Date(year, month, i)
     const dateStr = formatDateStr(d)
-    days.push({ date: d, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, events: [], projectsAdded: [] })
+    days.push({ date: d, dateStr, isCurrentMonth: true, isToday: dateStr === todayStr, events: [], followUps: [], projectsAdded: [] })
   }
 
   // Next month padding (fill to 42 = 6 rows)
@@ -75,7 +85,7 @@ function getDaysInMonth(year: number, month: number): DayData[] {
   for (let i = 1; i <= remaining; i++) {
     const d = new Date(year, month + 1, i)
     const dateStr = formatDateStr(d)
-    days.push({ date: d, dateStr, isCurrentMonth: false, isToday: dateStr === todayStr, events: [], projectsAdded: [] })
+    days.push({ date: d, dateStr, isCurrentMonth: false, isToday: dateStr === todayStr, events: [], followUps: [], projectsAdded: [] })
   }
 
   return days
@@ -92,6 +102,7 @@ const MONTH_NAMES = [
 
 export default function CalendarPage({ projects, token, onProjectsRefresh }: CalendarPageProps) {
   const today = new Date()
+  const todayStr = today.toISOString().slice(0, 10)
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [showAddModal, setShowAddModal] = useState(false)
@@ -113,6 +124,33 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
       eventsByDate.get(dateKey)!.push({ ...event, clientName: project?.clientName })
     }
 
+    const followUpsByDate = new Map<string, FollowUpCalendarItem[]>()
+    for (const project of projects) {
+      if (project.invoiceStatus === 'Paid') {
+        continue
+      }
+
+      const followUpDate = project.nextFollowUpDate ?? project.dueDate
+      if (!followUpDate) {
+        continue
+      }
+
+      const item: FollowUpCalendarItem = {
+        projectId: project.id,
+        clientName: project.clientName,
+        projectName: project.projectName,
+        date: followUpDate,
+        kind: project.nextFollowUpDate ? 'follow_up' : 'due_date',
+        invoiceStatus: project.invoiceStatus,
+      }
+
+      if (!followUpsByDate.has(followUpDate)) {
+        followUpsByDate.set(followUpDate, [])
+      }
+
+      followUpsByDate.get(followUpDate)!.push(item)
+    }
+
     const projectsByDate = new Map<string, Project[]>()
     for (const project of projects) {
       if (project.createdAt) {
@@ -125,6 +163,13 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
     // Populate days
     for (const day of baseDays) {
       day.events = eventsByDate.get(day.dateStr) || []
+      day.followUps = (followUpsByDate.get(day.dateStr) || []).sort((a, b) => {
+        if (a.kind !== b.kind) {
+          return a.kind === 'follow_up' ? -1 : 1
+        }
+
+        return a.clientName.localeCompare(b.clientName)
+      })
       day.projectsAdded = projectsByDate.get(day.dateStr) || []
     }
 
@@ -142,6 +187,16 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
   const monthStats = useMemo(() => {
     const sent = monthEvents.filter(e => e.type === 'sent')
     const paid = monthEvents.filter(e => e.type === 'paid')
+    const followUps = projects.filter((project) => {
+      const date = project.nextFollowUpDate ?? project.dueDate
+      if (!date || project.invoiceStatus === 'Paid') {
+        return false
+      }
+
+      const eventDate = new Date(`${date}T00:00:00`)
+      return eventDate.getFullYear() === currentYear && eventDate.getMonth() === currentMonth
+    })
+
     return {
       sentCount: sent.length,
       sentAmount: sent.reduce((s, e) => s + e.amount, 0),
@@ -149,8 +204,31 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
       paidAmount: paid.reduce((s, e) => s + e.amount, 0),
       reminderCount: monthEvents.filter(e => e.type === 'reminder').length,
       disputedCount: monthEvents.filter(e => e.type === 'disputed').length,
+      followUpCount: followUps.length,
+      overdueFollowUpCount: followUps.filter((project) => (project.nextFollowUpDate ?? project.dueDate ?? todayStr) < todayStr).length,
     }
-  }, [monthEvents])
+  }, [currentMonth, currentYear, monthEvents, projects, todayStr])
+
+  const upcomingFollowUps = useMemo(() => {
+    return projects
+      .filter((project) => project.invoiceStatus !== 'Paid')
+      .map((project) => {
+        const date = project.nextFollowUpDate ?? project.dueDate
+        if (!date) {
+          return null
+        }
+
+        return {
+          project,
+          date,
+          kind: project.nextFollowUpDate ? 'Follow-up' : 'Due date',
+          overdue: date < todayStr,
+        }
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.project.clientName.localeCompare(b.project.clientName))
+      .slice(0, 12)
+  }, [projects, todayStr])
 
   const prevMonth = () => {
     if (currentMonth === 0) {
@@ -232,7 +310,7 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
       </div>
 
       {/* Month Summary Cards */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-6">
         <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <PaperAirplaneIcon className="size-4 text-blue-500" />
@@ -262,6 +340,20 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
             Disputed
           </div>
           <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.disputedCount}</p>
+        </div>
+        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <BellAlertIcon className="size-4 text-amber-500" />
+            Follow-ups
+          </div>
+          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.followUpCount}</p>
+        </div>
+        <div className="rounded-lg bg-white p-4 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 text-sm text-gray-500">
+            <ExclamationTriangleIcon className="size-4 text-orange-500" />
+            Past Due
+          </div>
+          <p className="mt-1 text-xl font-bold text-gray-900">{monthStats.overdueFollowUpCount}</p>
         </div>
       </div>
 
@@ -339,6 +431,25 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
 
                   {/* Events */}
                   <div className="mt-1 space-y-0.5">
+                    {day.followUps.slice(0, 2).map((item) => (
+                      <Link
+                        key={`${item.projectId}-${item.kind}`}
+                        to={`/projects/${item.projectId}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className={`flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium border ${
+                          item.kind === 'follow_up'
+                            ? 'border-amber-200 bg-amber-50 text-amber-700'
+                            : 'border-orange-200 bg-orange-50 text-orange-700'
+                        }`}
+                        title={`${item.clientName}: ${item.kind === 'follow_up' ? 'Follow-up scheduled' : 'Due date'}`}
+                      >
+                        <span className={`inline-block size-1.5 shrink-0 rounded-full ${
+                          item.kind === 'follow_up' ? 'bg-amber-500' : 'bg-orange-500'
+                        }`} />
+                        <span className="truncate">{item.clientName.split(' ')[0]}</span>
+                        <span className="ml-auto shrink-0">{item.kind === 'follow_up' ? 'FU' : 'Due'}</span>
+                      </Link>
+                    ))}
                     {day.events.slice(0, 3).map((event) => {
                       const config = EVENT_TYPE_CONFIG[event.type]
                       return (
@@ -355,13 +466,51 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
                         </div>
                       )
                     })}
-                    {day.events.length > 3 && (
-                      <p className="text-[10px] text-gray-400 pl-1">+{day.events.length - 3} more</p>
+                    {day.followUps.length + day.events.length > 5 && (
+                      <p className="text-[10px] text-gray-400 pl-1">+{day.followUps.length + day.events.length - 5} more</p>
                     )}
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="mt-8">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">Upcoming Follow-ups</h3>
+            {upcomingFollowUps.length === 0 ? (
+              <div className="rounded-lg bg-white shadow px-6 py-10 text-center">
+                <BellAlertIcon className="mx-auto size-10 text-gray-400" />
+                <p className="mt-3 text-sm font-medium text-gray-900">No follow-ups scheduled</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Set invoice sent or next follow-up dates in project financials to populate the queue.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg bg-white shadow">
+                <ul className="divide-y divide-gray-100">
+                  {upcomingFollowUps.map(({ project, date, kind, overdue }) => (
+                    <li key={`${project.id}-${kind}-${date}`} className="flex items-center justify-between gap-4 px-4 py-3">
+                      <div className="min-w-0">
+                        <Link to={`/projects/${project.id}`} className="truncate text-sm font-medium text-gray-900 hover:text-primary">
+                          {project.clientName}
+                        </Link>
+                        <p className="text-xs text-gray-500">
+                          {kind} • {project.projectName || project.projectType || 'Project detail'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-sm font-semibold ${overdue ? 'text-red-700' : 'text-gray-900'}`}>
+                          {new Date(`${date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {describeSchedule(date, todayStr)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Upcoming Events List */}
@@ -469,4 +618,21 @@ export default function CalendarPage({ projects, token, onProjectsRefresh }: Cal
       />
     </div>
   )
+}
+
+function describeSchedule(date: string, today: string) {
+  const diff = Math.floor(
+    (new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000
+  )
+
+  if (diff < 0) {
+    const overdueDays = Math.abs(diff)
+    return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`
+  }
+
+  if (diff === 0) {
+    return 'Due today'
+  }
+
+  return `In ${diff} day${diff === 1 ? '' : 's'}`
 }
