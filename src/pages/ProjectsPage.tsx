@@ -15,16 +15,55 @@ interface ProjectsPageProps {
 export default function ProjectsPage({ projects, loading, token, onRefresh }: ProjectsPageProps) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterCollections, setFilterCollections] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
+  const today = new Date().toISOString().slice(0, 10)
 
-  const filtered = projects.filter((project) => {
-    const matchesSearch =
+  const filtered = projects
+    .filter((project) => {
+      const matchesSearch =
       project.clientName.toLowerCase().includes(search.toLowerCase()) ||
       project.projectName.toLowerCase().includes(search.toLowerCase()) ||
       project.xactimateNumber.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
-    return matchesSearch && matchesStatus
-  })
+      const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
+
+      const followUpDate = project.nextFollowUpDate ?? project.dueDate
+      const matchesCollections = (() => {
+        if (filterCollections === 'all') {
+          return true
+        }
+
+        if (filterCollections === 'needs-attention') {
+          return project.invoiceStatus !== 'Paid' && followUpDate !== null && followUpDate <= today
+        }
+
+        if (filterCollections === 'upcoming') {
+          return project.invoiceStatus !== 'Paid' && followUpDate !== null && followUpDate > today
+        }
+
+        if (filterCollections === 'paid') {
+          return project.invoiceStatus === 'Paid'
+        }
+
+        return true
+      })()
+
+      return matchesSearch && matchesStatus && matchesCollections
+    })
+    .sort((a, b) => {
+      const aFollowUp = a.nextFollowUpDate ?? a.dueDate ?? '9999-12-31'
+      const bFollowUp = b.nextFollowUpDate ?? b.dueDate ?? '9999-12-31'
+
+      if (a.invoiceStatus !== 'Paid' && b.invoiceStatus === 'Paid') {
+        return -1
+      }
+
+      if (a.invoiceStatus === 'Paid' && b.invoiceStatus !== 'Paid') {
+        return 1
+      }
+
+      return aFollowUp.localeCompare(bFollowUp) || a.clientName.localeCompare(b.clientName)
+    })
 
   if (loading) {
     return (
@@ -77,6 +116,16 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
           <option value="Paid">Paid</option>
           <option value="Overdue">Overdue</option>
         </select>
+        <select
+          value={filterCollections}
+          onChange={(e) => setFilterCollections(e.target.value)}
+          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="all">All Collections</option>
+          <option value="needs-attention">Needs Attention</option>
+          <option value="upcoming">Upcoming Follow-up</option>
+          <option value="paid">Collected</option>
+        </select>
         <span className="text-sm text-muted">{filtered.length} projects</span>
       </div>
 
@@ -93,7 +142,8 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
               <th className="px-4 py-3 font-semibold text-secondary">Status</th>
               <th className="px-4 py-3 font-semibold text-secondary">Contract</th>
               <th className="px-4 py-3 font-semibold text-secondary">COC</th>
-              <th className="px-4 py-3 font-semibold text-secondary">Date</th>
+              <th className="px-4 py-3 font-semibold text-secondary">Due</th>
+              <th className="px-4 py-3 font-semibold text-secondary">Next Follow-up</th>
               <th className="px-4 py-3 font-semibold text-secondary"></th>
             </tr>
           </thead>
@@ -130,8 +180,15 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                 <td className="px-4 py-3"><StatusPill value={project.invoiceStatus} /></td>
                 <td className="px-4 py-3"><StatusPill value={project.contractStatus} /></td>
                 <td className="px-4 py-3"><StatusPill value={project.cocStatus} /></td>
-                <td className="px-4 py-3 text-xs text-muted whitespace-nowrap">
-                  {project.createdAt ? new Date(project.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '\u2014'}
+                <td className="px-4 py-3 text-xs whitespace-nowrap">
+                  <span className={project.dueDate && project.dueDate < today && project.invoiceStatus !== 'Paid' ? 'font-semibold text-red-700' : 'text-muted'}>
+                    {formatDate(project.dueDate)}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-xs whitespace-nowrap">
+                  <span className={followUpTone(project, today)}>
+                    {formatDate(project.nextFollowUpDate)}
+                  </span>
                 </td>
                 <td className="px-4 py-3">
                   <Link
@@ -161,4 +218,32 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
       />
     </div>
   )
+}
+
+function formatDate(date: string | null) {
+  if (!date) {
+    return '\u2014'
+  }
+
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function followUpTone(project: Project, today: string) {
+  const nextFollowUpDate = project.nextFollowUpDate
+  if (!nextFollowUpDate || project.invoiceStatus === 'Paid') {
+    return 'text-muted'
+  }
+
+  if (nextFollowUpDate < today) {
+    return 'font-semibold text-red-700'
+  }
+
+  if (nextFollowUpDate === today) {
+    return 'font-semibold text-amber-700'
+  }
+
+  return 'text-muted'
 }
