@@ -11,3 +11,4 @@
 - 2026-03-06: Local D1 migrations must use `--persist-to .wrangler/state` so `wrangler d1 migrations apply --local` targets the same sqlite database that `wrangler pages dev --persist-to .wrangler/state` serves.
 - 2026-03-06: Project-store queries now self-bootstrap the D1 schema on first missing-table or missing-column errors so local Pages dev initializes the exact runtime database it is serving before Milestone 2 QA continues.
 - 2026-03-06: The local `public/` shell now only exists to hand `wrangler pages dev` requests off to the Vite app on `localhost:5174`, so root and missing client routes stay usable during local Pages-based QA.
+- 2026-03-06: Local QA seed data uses stable `QA-CLM-*` claim numbers and event-note markers so the seeding script can upsert the Milestone 2 regression dataset over the local API without blindly duplicating projects.
