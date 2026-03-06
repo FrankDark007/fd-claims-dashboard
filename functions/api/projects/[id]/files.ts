@@ -93,6 +93,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     uploadedBy: getUserField(context, 'displayName') || 'Unknown',
   })
 
+  // Auto-update document status when a file is uploaded to a tracked category.
+  // Only promotes from "Missing" — doesn't overwrite manual status changes.
+  const AUTO_STATUS: Record<string, { column: string; fromValue: string; toValue: string }> = {
+    contracts: { column: 'contract_status', fromValue: 'Missing', toValue: 'Signed' },
+    cocs:      { column: 'coc_status',      fromValue: 'Missing', toValue: 'Signed' },
+    drylogs:   { column: 'drylog_status',   fromValue: 'Missing', toValue: 'Received' },
+    invoices:  { column: 'final_invoice_status', fromValue: 'Not Started', toValue: 'Complete' },
+  }
+  const autoStatus = AUTO_STATUS[category]
+  if (autoStatus) {
+    await context.env.FD_CLAIMS_DB.prepare(
+      `UPDATE projects SET ${autoStatus.column} = ?, updated_at = datetime('now') WHERE id = ? AND ${autoStatus.column} = ?`
+    ).bind(autoStatus.toValue, projectId, autoStatus.fromValue).run()
+  }
+
   return Response.json({ file: newFile }, { status: 201 })
 }
 
