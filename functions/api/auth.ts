@@ -3,6 +3,25 @@ interface Env {
   FD_CLAIMS_USERS: KVNamespace
 }
 
+interface AuthUserRecord {
+  id: string
+  username: string
+  displayName: string
+  passwordHash: string
+  salt: string
+  role: string
+  email?: string
+  createdAt?: string
+}
+
+const LOCAL_ADMIN = {
+  username: 'frank',
+  displayName: 'Frank',
+  email: 'darakhshan.farough@gmail.com',
+  password: 'codex-local',
+  role: 'admin',
+} as const
+
 async function hashPassword(password: string, salt: string): Promise<string> {
   const encoder = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
@@ -28,6 +47,32 @@ async function createSessionToken(userId: string, username: string, secret: stri
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+function shouldBootstrapLocalAdmin(request: Request, username: string, password: string): boolean {
+  const hostname = new URL(request.url).hostname
+  return (
+    (hostname === 'localhost' || hostname === '127.0.0.1') &&
+    username === LOCAL_ADMIN.username &&
+    password === LOCAL_ADMIN.password
+  )
+}
+
+async function upsertLocalAdmin(env: Env): Promise<AuthUserRecord> {
+  const salt = crypto.randomUUID()
+  const passwordHash = await hashPassword(LOCAL_ADMIN.password, salt)
+  const user: AuthUserRecord = {
+    id: crypto.randomUUID(),
+    username: LOCAL_ADMIN.username,
+    displayName: LOCAL_ADMIN.displayName,
+    passwordHash,
+    salt,
+    role: LOCAL_ADMIN.role,
+    email: LOCAL_ADMIN.email,
+    createdAt: new Date().toISOString(),
+  }
+  await env.FD_CLAIMS_USERS.put(`user:${LOCAL_ADMIN.username}`, JSON.stringify(user))
+  return user
+}
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { username, password } = await context.request.json() as { username: string; password: string }
@@ -36,20 +81,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return Response.json({ error: 'Username and password required' }, { status: 400 })
     }
 
-    // Look up user in KV
-    const userJson = await context.env.FD_CLAIMS_USERS.get(`user:${username.toLowerCase()}`)
-    if (!userJson) {
-      return Response.json({ error: 'Invalid credentials' }, { status: 401 })
-    }
+    const normalizedUsername = username.toLowerCase().trim()
+    let user: AuthUserRecord
 
-    const user = JSON.parse(userJson) as {
-      id: string
-      username: string
-      displayName: string
-      passwordHash: string
-      salt: string
-      role: string
-      email?: string
+    if (shouldBootstrapLocalAdmin(context.request, normalizedUsername, password)) {
+      user = await upsertLocalAdmin(context.env)
+    } else {
+      const userJson = await context.env.FD_CLAIMS_USERS.get(`user:${normalizedUsername}`)
+      if (!userJson) {
+        return Response.json({ error: 'Invalid credentials' }, { status: 401 })
+      }
+
+      user = JSON.parse(userJson) as AuthUserRecord
     }
 
     // Verify password

@@ -176,6 +176,150 @@ const PROJECT_NOTE_SELECT = `
   FROM project_notes
 `
 
+const PROJECT_SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    invoice_id INTEGER,
+    client_name TEXT NOT NULL,
+    project_name TEXT NOT NULL DEFAULT '',
+    project_type TEXT,
+    project_status TEXT NOT NULL DEFAULT 'Active',
+    invoice_status TEXT NOT NULL DEFAULT 'Draft',
+    amount REAL,
+    contract_status TEXT NOT NULL DEFAULT 'Missing',
+    coc_status TEXT NOT NULL DEFAULT 'Missing',
+    final_invoice_status TEXT NOT NULL DEFAULT 'Not Started',
+    drylog_status TEXT NOT NULL DEFAULT 'Missing',
+    rewrite_status TEXT NOT NULL DEFAULT 'Not Started',
+    matterport_status TEXT NOT NULL DEFAULT 'N/A',
+    company_cam_url TEXT NOT NULL DEFAULT '',
+    drive_folder_url TEXT NOT NULL DEFAULT '',
+    xactimate_number TEXT NOT NULL DEFAULT '',
+    claim_number TEXT NOT NULL DEFAULT '',
+    carrier TEXT NOT NULL DEFAULT '',
+    project_manager_name TEXT NOT NULL DEFAULT '',
+    pm_email TEXT NOT NULL DEFAULT '',
+    pm_phone TEXT NOT NULL DEFAULT '',
+    adjuster_name TEXT NOT NULL DEFAULT '',
+    adjuster_email TEXT NOT NULL DEFAULT '',
+    adjuster_phone TEXT NOT NULL DEFAULT '',
+    invoice_sent_date TEXT,
+    due_date TEXT,
+    payment_received_date TEXT,
+    notes TEXT NOT NULL DEFAULT '',
+    done INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_projects_invoice_status ON projects(invoice_status)',
+  'CREATE INDEX IF NOT EXISTS idx_projects_project_status ON projects(project_status)',
+  'CREATE INDEX IF NOT EXISTS idx_projects_due_date ON projects(due_date)',
+  'CREATE INDEX IF NOT EXISTS idx_projects_updated_at ON projects(updated_at DESC)',
+  `CREATE TABLE IF NOT EXISTS project_files (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    r2_key TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    uploaded_by TEXT NOT NULL,
+    uploaded_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_project_files_project_id ON project_files(project_id)',
+  'CREATE INDEX IF NOT EXISTS idx_project_files_category ON project_files(category)',
+  `CREATE TABLE IF NOT EXISTS invoice_events (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    recipient TEXT NOT NULL DEFAULT '',
+    amount REAL NOT NULL DEFAULT 0,
+    notes TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_invoice_events_project_id ON invoice_events(project_id)',
+  'CREATE INDEX IF NOT EXISTS idx_invoice_events_event_date ON invoice_events(event_date DESC)',
+  `CREATE TABLE IF NOT EXISTS project_tasks (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    completed INTEGER NOT NULL DEFAULT 0,
+    assignee TEXT NOT NULL DEFAULT '',
+    due_date TEXT,
+    notes TEXT NOT NULL DEFAULT '',
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_project_tasks_project_id ON project_tasks(project_id)',
+  'CREATE INDEX IF NOT EXISTS idx_project_tasks_sort_order ON project_tasks(project_id, sort_order)',
+  `CREATE TABLE IF NOT EXISTS project_notes (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    body TEXT NOT NULL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_by TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_project_notes_project_id ON project_notes(project_id)',
+  'CREATE INDEX IF NOT EXISTS idx_project_notes_pinned ON project_notes(project_id, pinned DESC, updated_at DESC)',
+]
+
+let schemaBootstrapPromise: Promise<void> | null = null
+
+function shouldBootstrapProjectSchema(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return error.message.includes('no such table:') || error.message.includes('no such column: next_follow_up_date')
+}
+
+async function ensureProjectSchema(db: D1Database): Promise<void> {
+  if (!schemaBootstrapPromise) {
+    schemaBootstrapPromise = (async () => {
+      for (const statement of PROJECT_SCHEMA_STATEMENTS) {
+        await db.prepare(statement).run()
+      }
+
+      const projectColumns = await db.prepare('PRAGMA table_info(projects)').all<{ name: string }>()
+      const hasNextFollowUpDate = (projectColumns.results ?? []).some((column) => column.name === 'next_follow_up_date')
+
+      if (!hasNextFollowUpDate) {
+        await db.prepare('ALTER TABLE projects ADD COLUMN next_follow_up_date TEXT').run()
+      }
+
+      await db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_next_follow_up_date ON projects(next_follow_up_date)').run()
+    })().catch((error) => {
+      schemaBootstrapPromise = null
+      throw error
+    })
+  }
+
+  await schemaBootstrapPromise
+}
+
+async function withProjectSchema<T>(db: D1Database, operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation()
+  } catch (error) {
+    if (!shouldBootstrapProjectSchema(error)) {
+      throw error
+    }
+
+    await ensureProjectSchema(db)
+    return operation()
+  }
+}
+
 function mapProjectRecord(record: ProjectRecord): Project {
   return {
     id: record.id,
@@ -361,60 +505,66 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
 }
 
 async function getProjectRecord(db: D1Database, projectId: string): Promise<ProjectRecord | null> {
-  const record = await db.prepare(`${PROJECT_SELECT} WHERE id = ?`).bind(projectId).first<ProjectRecord>()
-  return record ?? null
+  return withProjectSchema(db, async () => {
+    const record = await db.prepare(`${PROJECT_SELECT} WHERE id = ?`).bind(projectId).first<ProjectRecord>()
+    return record ?? null
+  })
 }
 
 async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): Promise<void> {
-  await db.prepare(`
-    INSERT OR REPLACE INTO projects (
-      id, invoice_id, client_name, project_name, project_type, project_status, invoice_status,
-      amount, contract_status, coc_status, final_invoice_status, drylog_status, rewrite_status,
-      matterport_status, company_cam_url, drive_folder_url, xactimate_number, claim_number,
-      carrier, project_manager_name, pm_email, pm_phone, adjuster_name, adjuster_email,
-      adjuster_phone, invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
-      notes, done, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    project.id,
-    project.invoiceId,
-    project.clientName,
-    project.projectName,
-    project.projectType,
-    project.projectStatus,
-    project.invoiceStatus,
-    project.amount,
-    project.contractStatus,
-    project.cocStatus,
-    project.finalInvoiceStatus,
-    project.drylogStatus,
-    project.rewriteStatus,
-    project.matterportStatus,
-    project.companyCamUrl,
-    project.driveFolderUrl,
-    project.xactimateNumber,
-    project.claimNumber,
-    project.carrier,
-    project.projectManagerName,
-    project.pmEmail,
-    project.pmPhone,
-    project.adjusterName,
-    project.adjusterEmail,
-    project.adjusterPhone,
-    project.invoiceSentDate,
-    project.dueDate,
-    project.nextFollowUpDate,
-    project.paymentReceivedDate,
-    project.notes,
-    project.done,
-    project.createdAt,
-    project.updatedAt
-  ).run()
+  await withProjectSchema(db, async () => {
+    await db.prepare(`
+      INSERT OR REPLACE INTO projects (
+        id, invoice_id, client_name, project_name, project_type, project_status, invoice_status,
+        amount, contract_status, coc_status, final_invoice_status, drylog_status, rewrite_status,
+        matterport_status, company_cam_url, drive_folder_url, xactimate_number, claim_number,
+        carrier, project_manager_name, pm_email, pm_phone, adjuster_name, adjuster_email,
+        adjuster_phone, invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
+        notes, done, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      project.id,
+      project.invoiceId,
+      project.clientName,
+      project.projectName,
+      project.projectType,
+      project.projectStatus,
+      project.invoiceStatus,
+      project.amount,
+      project.contractStatus,
+      project.cocStatus,
+      project.finalInvoiceStatus,
+      project.drylogStatus,
+      project.rewriteStatus,
+      project.matterportStatus,
+      project.companyCamUrl,
+      project.driveFolderUrl,
+      project.xactimateNumber,
+      project.claimNumber,
+      project.carrier,
+      project.projectManagerName,
+      project.pmEmail,
+      project.pmPhone,
+      project.adjusterName,
+      project.adjusterEmail,
+      project.adjusterPhone,
+      project.invoiceSentDate,
+      project.dueDate,
+      project.nextFollowUpDate,
+      project.paymentReceivedDate,
+      project.notes,
+      project.done,
+      project.createdAt,
+      project.updatedAt
+    ).run()
+  })
 }
 
 export async function listProjects(db: D1Database): Promise<Project[]> {
-  const result = await db.prepare(`${PROJECT_SELECT} ORDER BY updated_at DESC, created_at DESC`).all<ProjectRecord>()
-  return (result.results ?? []).map(mapProjectRecord)
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(`${PROJECT_SELECT} ORDER BY updated_at DESC, created_at DESC`).all<ProjectRecord>()
+    return (result.results ?? []).map(mapProjectRecord)
+  })
 }
 
 export async function getProjectById(db: D1Database, projectId: string): Promise<Project | null> {
@@ -440,13 +590,17 @@ export async function updateProject(db: D1Database, projectId: string, input: Pr
 }
 
 export async function listProjectFiles(db: D1Database, projectId: string): Promise<ProjectFile[]> {
-  const result = await db.prepare(`${PROJECT_FILE_SELECT} WHERE project_id = ? ORDER BY uploaded_at DESC`).bind(projectId).all<ProjectFileRecord>()
-  return (result.results ?? []).map(mapProjectFileRecord)
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(`${PROJECT_FILE_SELECT} WHERE project_id = ? ORDER BY uploaded_at DESC`).bind(projectId).all<ProjectFileRecord>()
+    return (result.results ?? []).map(mapProjectFileRecord)
+  })
 }
 
 export async function getProjectFileById(db: D1Database, projectId: string, fileId: string): Promise<ProjectFile | null> {
-  const record = await db.prepare(`${PROJECT_FILE_SELECT} WHERE project_id = ? AND id = ?`).bind(projectId, fileId).first<ProjectFileRecord>()
-  return record ? mapProjectFileRecord(record) : null
+  return withProjectSchema(db, async () => {
+    const record = await db.prepare(`${PROJECT_FILE_SELECT} WHERE project_id = ? AND id = ?`).bind(projectId, fileId).first<ProjectFileRecord>()
+    return record ? mapProjectFileRecord(record) : null
+  })
 }
 
 export async function createProjectFile(
@@ -462,37 +616,39 @@ export async function createProjectFile(
     uploadedBy: string
   }
 ): Promise<ProjectFile> {
-  const file: ProjectFile = {
-    id: crypto.randomUUID(),
-    projectId: params.projectId,
-    filename: params.filename,
-    originalName: params.originalName,
-    r2Key: params.r2Key,
-    category: params.category,
-    mimeType: params.mimeType,
-    sizeBytes: params.sizeBytes,
-    uploadedBy: params.uploadedBy,
-    uploadedAt: new Date().toISOString(),
-  }
+  return withProjectSchema(db, async () => {
+    const file: ProjectFile = {
+      id: crypto.randomUUID(),
+      projectId: params.projectId,
+      filename: params.filename,
+      originalName: params.originalName,
+      r2Key: params.r2Key,
+      category: params.category,
+      mimeType: params.mimeType,
+      sizeBytes: params.sizeBytes,
+      uploadedBy: params.uploadedBy,
+      uploadedAt: new Date().toISOString(),
+    }
 
-  await db.prepare(`
-    INSERT INTO project_files (
-      id, project_id, filename, original_name, r2_key, category, mime_type, size_bytes, uploaded_by, uploaded_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    file.id,
-    file.projectId,
-    file.filename,
-    file.originalName,
-    file.r2Key,
-    file.category,
-    file.mimeType,
-    file.sizeBytes,
-    file.uploadedBy,
-    file.uploadedAt
-  ).run()
+    await db.prepare(`
+      INSERT INTO project_files (
+        id, project_id, filename, original_name, r2_key, category, mime_type, size_bytes, uploaded_by, uploaded_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      file.id,
+      file.projectId,
+      file.filename,
+      file.originalName,
+      file.r2Key,
+      file.category,
+      file.mimeType,
+      file.sizeBytes,
+      file.uploadedBy,
+      file.uploadedAt
+    ).run()
 
-  return file
+    return file
+  })
 }
 
 export async function deleteProjectFile(db: D1Database, projectId: string, fileId: string): Promise<ProjectFile | null> {
@@ -506,11 +662,13 @@ export async function deleteProjectFile(db: D1Database, projectId: string, fileI
 }
 
 export async function listProjectNotes(db: D1Database, projectId: string): Promise<ProjectNote[]> {
-  const result = await db.prepare(
-    `${PROJECT_NOTE_SELECT} WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC, created_at DESC`
-  ).bind(projectId).all<ProjectNoteRecord>()
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(
+      `${PROJECT_NOTE_SELECT} WHERE project_id = ? ORDER BY pinned DESC, updated_at DESC, created_at DESC`
+    ).bind(projectId).all<ProjectNoteRecord>()
 
-  return (result.results ?? []).map(mapProjectNoteRecord)
+    return (result.results ?? []).map(mapProjectNoteRecord)
+  })
 }
 
 export async function createProjectNote(
@@ -522,32 +680,34 @@ export async function createProjectNote(
     createdBy: string
   }
 ): Promise<ProjectNote> {
-  const now = new Date().toISOString()
-  const note: ProjectNote = {
-    id: crypto.randomUUID(),
-    projectId: params.projectId,
-    body: normalizeOptionalText(params.body),
-    pinned: params.pinned ?? false,
-    createdBy: params.createdBy,
-    createdAt: now,
-    updatedAt: now,
-  }
+  return withProjectSchema(db, async () => {
+    const now = new Date().toISOString()
+    const note: ProjectNote = {
+      id: crypto.randomUUID(),
+      projectId: params.projectId,
+      body: normalizeOptionalText(params.body),
+      pinned: params.pinned ?? false,
+      createdBy: params.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    }
 
-  await db.prepare(`
-    INSERT INTO project_notes (
-      id, project_id, body, pinned, created_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    note.id,
-    note.projectId,
-    note.body,
-    note.pinned ? 1 : 0,
-    note.createdBy,
-    note.createdAt,
-    note.updatedAt
-  ).run()
+    await db.prepare(`
+      INSERT INTO project_notes (
+        id, project_id, body, pinned, created_by, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      note.id,
+      note.projectId,
+      note.body,
+      note.pinned ? 1 : 0,
+      note.createdBy,
+      note.createdAt,
+      note.updatedAt
+    ).run()
 
-  return note
+    return note
+  })
 }
 
 export async function updateProjectNote(
@@ -559,55 +719,61 @@ export async function updateProjectNote(
     pinned?: boolean
   }
 ): Promise<ProjectNote | null> {
-  const existing = await db.prepare(
-    `${PROJECT_NOTE_SELECT} WHERE project_id = ? AND id = ?`
-  ).bind(params.projectId, params.noteId).first<ProjectNoteRecord>()
+  return withProjectSchema(db, async () => {
+    const existing = await db.prepare(
+      `${PROJECT_NOTE_SELECT} WHERE project_id = ? AND id = ?`
+    ).bind(params.projectId, params.noteId).first<ProjectNoteRecord>()
 
-  if (!existing) {
-    return null
-  }
+    if (!existing) {
+      return null
+    }
 
-  const next: ProjectNote = {
-    id: existing.id,
-    projectId: existing.projectId,
-    body: params.body !== undefined ? normalizeOptionalText(params.body) : existing.body,
-    pinned: params.pinned !== undefined ? params.pinned : normalizeBoolean(existing.pinned),
-    createdBy: existing.createdBy,
-    createdAt: existing.createdAt,
-    updatedAt: new Date().toISOString(),
-  }
+    const next: ProjectNote = {
+      id: existing.id,
+      projectId: existing.projectId,
+      body: params.body !== undefined ? normalizeOptionalText(params.body) : existing.body,
+      pinned: params.pinned !== undefined ? params.pinned : normalizeBoolean(existing.pinned),
+      createdBy: existing.createdBy,
+      createdAt: existing.createdAt,
+      updatedAt: new Date().toISOString(),
+    }
 
-  await db.prepare(`
-    UPDATE project_notes
-    SET body = ?, pinned = ?, updated_at = ?
-    WHERE project_id = ? AND id = ?
-  `).bind(
-    next.body,
-    next.pinned ? 1 : 0,
-    next.updatedAt,
-    params.projectId,
-    params.noteId
-  ).run()
+    await db.prepare(`
+      UPDATE project_notes
+      SET body = ?, pinned = ?, updated_at = ?
+      WHERE project_id = ? AND id = ?
+    `).bind(
+      next.body,
+      next.pinned ? 1 : 0,
+      next.updatedAt,
+      params.projectId,
+      params.noteId
+    ).run()
 
-  return next
+    return next
+  })
 }
 
 export async function deleteProjectNote(db: D1Database, projectId: string, noteId: string): Promise<boolean> {
-  const result = await db.prepare(
-    'DELETE FROM project_notes WHERE project_id = ? AND id = ?'
-  ).bind(projectId, noteId).run()
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(
+      'DELETE FROM project_notes WHERE project_id = ? AND id = ?'
+    ).bind(projectId, noteId).run()
 
-  return (result.meta.changes ?? 0) > 0
+    return (result.meta.changes ?? 0) > 0
+  })
 }
 
 export async function listInvoiceEvents(db: D1Database, projectId?: string): Promise<InvoiceEvent[]> {
-  const query = projectId
-    ? `${INVOICE_EVENT_SELECT} WHERE project_id = ? ORDER BY event_date DESC, created_at DESC`
-    : `${INVOICE_EVENT_SELECT} ORDER BY event_date DESC, created_at DESC`
+  return withProjectSchema(db, async () => {
+    const query = projectId
+      ? `${INVOICE_EVENT_SELECT} WHERE project_id = ? ORDER BY event_date DESC, created_at DESC`
+      : `${INVOICE_EVENT_SELECT} ORDER BY event_date DESC, created_at DESC`
 
-  const statement = projectId ? db.prepare(query).bind(projectId) : db.prepare(query)
-  const result = await statement.all<InvoiceEventRecord>()
-  return (result.results ?? []).map(mapInvoiceEventRecord)
+    const statement = projectId ? db.prepare(query).bind(projectId) : db.prepare(query)
+    const result = await statement.all<InvoiceEventRecord>()
+    return (result.results ?? []).map(mapInvoiceEventRecord)
+  })
 }
 
 export async function getInvoiceEventById(
@@ -615,11 +781,13 @@ export async function getInvoiceEventById(
   projectId: string,
   eventId: string
 ): Promise<InvoiceEvent | null> {
-  const record = await db.prepare(
-    `${INVOICE_EVENT_SELECT} WHERE project_id = ? AND id = ?`
-  ).bind(projectId, eventId).first<InvoiceEventRecord>()
+  return withProjectSchema(db, async () => {
+    const record = await db.prepare(
+      `${INVOICE_EVENT_SELECT} WHERE project_id = ? AND id = ?`
+    ).bind(projectId, eventId).first<InvoiceEventRecord>()
 
-  return record ? mapInvoiceEventRecord(record) : null
+    return record ? mapInvoiceEventRecord(record) : null
+  })
 }
 
 function getLatestInvoiceEvent(events: InvoiceEvent[], type: InvoiceEvent['type']): InvoiceEvent | null {
@@ -745,42 +913,44 @@ export async function createInvoiceEvent(
     eventDate: string
   }
 ): Promise<InvoiceEvent> {
-  const type = normalizeInvoiceEventType(params.type)
-  if (!type) {
-    throw new Error('Invalid invoice event type')
-  }
+  return withProjectSchema(db, async () => {
+    const type = normalizeInvoiceEventType(params.type)
+    if (!type) {
+      throw new Error('Invalid invoice event type')
+    }
 
-  const event: InvoiceEvent = {
-    id: crypto.randomUUID(),
-    projectId: params.projectId,
-    type,
-    recipient: normalizeOptionalText(params.recipient),
-    amount: normalizeNullableNumber(params.amount) ?? 0,
-    notes: normalizeOptionalText(params.notes),
-    createdBy: params.createdBy,
-    createdAt: new Date().toISOString(),
-    eventDate: normalizeDateOnly(params.eventDate) ?? new Date().toISOString().slice(0, 10),
-  }
+    const event: InvoiceEvent = {
+      id: crypto.randomUUID(),
+      projectId: params.projectId,
+      type,
+      recipient: normalizeOptionalText(params.recipient),
+      amount: normalizeNullableNumber(params.amount) ?? 0,
+      notes: normalizeOptionalText(params.notes),
+      createdBy: params.createdBy,
+      createdAt: new Date().toISOString(),
+      eventDate: normalizeDateOnly(params.eventDate) ?? new Date().toISOString().slice(0, 10),
+    }
 
-  await db.prepare(`
-    INSERT INTO invoice_events (
-      id, project_id, type, recipient, amount, notes, created_by, created_at, event_date
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    event.id,
-    event.projectId,
-    event.type,
-    event.recipient,
-    event.amount,
-    event.notes,
-    event.createdBy,
-    event.createdAt,
-    event.eventDate
-  ).run()
+    await db.prepare(`
+      INSERT INTO invoice_events (
+        id, project_id, type, recipient, amount, notes, created_by, created_at, event_date
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      event.id,
+      event.projectId,
+      event.type,
+      event.recipient,
+      event.amount,
+      event.notes,
+      event.createdBy,
+      event.createdAt,
+      event.eventDate
+    ).run()
 
-  await reconcileProjectInvoiceWorkflow(db, event.projectId, null, event)
+    await reconcileProjectInvoiceWorkflow(db, event.projectId, null, event)
 
-  return event
+    return event
+  })
 }
 
 export async function updateInvoiceEvent(
@@ -795,60 +965,64 @@ export async function updateInvoiceEvent(
     eventDate?: string
   }
 ): Promise<InvoiceEvent | null> {
-  const existing = await getInvoiceEventById(db, params.projectId, params.eventId)
-  if (!existing) {
-    return null
-  }
+  return withProjectSchema(db, async () => {
+    const existing = await getInvoiceEventById(db, params.projectId, params.eventId)
+    if (!existing) {
+      return null
+    }
 
-  const type = params.type !== undefined ? normalizeInvoiceEventType(params.type) : existing.type
-  if (!type) {
-    throw new Error('Invalid invoice event type')
-  }
+    const type = params.type !== undefined ? normalizeInvoiceEventType(params.type) : existing.type
+    if (!type) {
+      throw new Error('Invalid invoice event type')
+    }
 
-  const next: InvoiceEvent = {
-    id: existing.id,
-    projectId: existing.projectId,
-    type,
-    recipient: params.recipient !== undefined ? normalizeOptionalText(params.recipient) : existing.recipient,
-    amount: params.amount !== undefined ? normalizeNullableNumber(params.amount) ?? 0 : existing.amount,
-    notes: params.notes !== undefined ? normalizeOptionalText(params.notes) : existing.notes,
-    createdBy: existing.createdBy,
-    createdAt: existing.createdAt,
-    eventDate: params.eventDate !== undefined
-      ? normalizeDateOnly(params.eventDate) ?? existing.eventDate
-      : existing.eventDate,
-  }
+    const next: InvoiceEvent = {
+      id: existing.id,
+      projectId: existing.projectId,
+      type,
+      recipient: params.recipient !== undefined ? normalizeOptionalText(params.recipient) : existing.recipient,
+      amount: params.amount !== undefined ? normalizeNullableNumber(params.amount) ?? 0 : existing.amount,
+      notes: params.notes !== undefined ? normalizeOptionalText(params.notes) : existing.notes,
+      createdBy: existing.createdBy,
+      createdAt: existing.createdAt,
+      eventDate: params.eventDate !== undefined
+        ? normalizeDateOnly(params.eventDate) ?? existing.eventDate
+        : existing.eventDate,
+    }
 
-  await db.prepare(`
-    UPDATE invoice_events
-    SET type = ?, recipient = ?, amount = ?, notes = ?, event_date = ?
-    WHERE project_id = ? AND id = ?
-  `).bind(
-    next.type,
-    next.recipient,
-    next.amount,
-    next.notes,
-    next.eventDate,
-    params.projectId,
-    params.eventId
-  ).run()
+    await db.prepare(`
+      UPDATE invoice_events
+      SET type = ?, recipient = ?, amount = ?, notes = ?, event_date = ?
+      WHERE project_id = ? AND id = ?
+    `).bind(
+      next.type,
+      next.recipient,
+      next.amount,
+      next.notes,
+      next.eventDate,
+      params.projectId,
+      params.eventId
+    ).run()
 
-  await reconcileProjectInvoiceWorkflow(db, params.projectId, existing, next)
-  return next
+    await reconcileProjectInvoiceWorkflow(db, params.projectId, existing, next)
+    return next
+  })
 }
 
 export async function deleteInvoiceEvent(db: D1Database, projectId: string, eventId: string): Promise<boolean> {
-  const existing = await getInvoiceEventById(db, projectId, eventId)
-  if (!existing) {
-    return false
-  }
+  return withProjectSchema(db, async () => {
+    const existing = await getInvoiceEventById(db, projectId, eventId)
+    if (!existing) {
+      return false
+    }
 
-  const result = await db.prepare('DELETE FROM invoice_events WHERE project_id = ? AND id = ?').bind(projectId, eventId).run()
-  const deleted = (result.meta.changes ?? 0) > 0
+    const result = await db.prepare('DELETE FROM invoice_events WHERE project_id = ? AND id = ?').bind(projectId, eventId).run()
+    const deleted = (result.meta.changes ?? 0) > 0
 
-  if (deleted) {
-    await reconcileProjectInvoiceWorkflow(db, projectId, existing, null)
-  }
+    if (deleted) {
+      await reconcileProjectInvoiceWorkflow(db, projectId, existing, null)
+    }
 
-  return deleted
+    return deleted
+  })
 }
