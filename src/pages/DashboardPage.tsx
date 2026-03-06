@@ -18,6 +18,28 @@ interface DashboardPageProps {
 export default function DashboardPage({ projects, loading }: DashboardPageProps) {
   const stats = computeStats(projects)
   const agingBuckets = computeAging(projects)
+  const today = new Date().toISOString().slice(0, 10)
+  const followUpQueue = projects
+    .filter((project) => project.invoiceStatus !== 'Paid')
+    .map((project) => ({
+      project,
+      followUpDate: project.nextFollowUpDate ?? project.dueDate,
+    }))
+    .filter((item) => item.followUpDate !== null)
+    .sort((a, b) => a.followUpDate!.localeCompare(b.followUpDate!))
+    .slice(0, 6)
+
+  const followUpTodayCount = followUpQueue.filter((item) => item.followUpDate === today).length
+  const followUpThisWeekCount = followUpQueue.filter((item) => {
+    if (!item.followUpDate) {
+      return false
+    }
+
+    const diff = Math.floor(
+      (new Date(`${item.followUpDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000
+    )
+    return diff >= 0 && diff <= 7
+  }).length
 
   if (loading) {
     return (
@@ -55,7 +77,7 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
         <StatsCard
           title="Overdue"
           value={stats.overdueCount}
-          subtitle="Need attention"
+          subtitle={`${followUpTodayCount} due today, ${followUpThisWeekCount} this week`}
           color="red"
           icon={<ExclamationTriangleIcon className="size-6 text-white" />}
         />
@@ -71,6 +93,43 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
       {/* Invoice Aging */}
       <div className="mb-8">
         <InvoiceAgingCard buckets={agingBuckets} />
+      </div>
+
+      <div className="mb-8 rounded-lg bg-white p-6 shadow">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Collections Queue</h2>
+            <p className="mt-1 text-sm text-secondary">Next projects that need a call, reminder, or payment check-in.</p>
+          </div>
+          <a href="/projects" className="text-sm font-medium text-primary hover:text-primary-hover">
+            View project list
+          </a>
+        </div>
+
+        {followUpQueue.length === 0 ? (
+          <div className="py-10 text-sm text-muted">No unpaid projects with follow-up dates are scheduled yet.</div>
+        ) : (
+          <ul className="mt-5 divide-y divide-gray-100">
+            {followUpQueue.map(({ project, followUpDate }) => (
+              <li key={project.id} className="flex items-center justify-between gap-4 py-4">
+                <div className="min-w-0">
+                  <a href={`/projects/${project.id}`} className="text-sm font-semibold text-foreground hover:text-primary">
+                    {project.clientName}
+                  </a>
+                  <p className="mt-1 text-sm text-secondary">
+                    {project.projectName || project.projectType || 'Uncategorized project'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-semibold ${followUpTone(followUpDate!, today)}`}>
+                    {formatDate(followUpDate!)}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">{followUpLabel(followUpDate!, today)}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Recent Projects */}
@@ -91,4 +150,41 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
       </div>
     </div>
   )
+}
+
+function formatDate(date: string) {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+function followUpTone(date: string, today: string) {
+  if (date < today) {
+    return 'text-red-700'
+  }
+
+  if (date === today) {
+    return 'text-amber-700'
+  }
+
+  return 'text-foreground'
+}
+
+function followUpLabel(date: string, today: string) {
+  const diff = Math.floor(
+    (new Date(`${date}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000
+  )
+
+  if (diff < 0) {
+    const overdueDays = Math.abs(diff)
+    return `${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue`
+  }
+
+  if (diff === 0) {
+    return 'Follow up today'
+  }
+
+  return `In ${diff} day${diff === 1 ? '' : 's'}`
 }
