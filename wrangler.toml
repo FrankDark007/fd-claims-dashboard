@@ -16,10 +16,9 @@ database_name = "fd-claims-dashboard"
 database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
 preview_database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
 
-# R2 TEMPORARILY REMOVED — enable R2 in Cloudflare Dashboard, create bucket, then uncomment:
-# [[r2_buckets]]
-# binding = "FD_PROJECT_FILES"
-# bucket_name = "fd-project-files"
+[[r2_buckets]]
+binding = "FD_PROJECT_FILES"
+bucket_name = "fd-project-files"
 
 [vars]
 GOOGLE_CLIENT_ID = ""
