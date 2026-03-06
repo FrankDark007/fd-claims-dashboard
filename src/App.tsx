@@ -45,8 +45,8 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
       <Routes>
         <Route path="/" element={<DashboardPage projects={projects} loading={loading} />} />
         <Route path="/projects" element={<ProjectsPage projects={projects} loading={loading} token={token} onRefresh={refetch} />} />
-        <Route path="/projects/:id" element={<ProjectDetailPage projects={projects} token={token} />} />
-        <Route path="/calendar" element={<CalendarPage projects={projects} token={token} />} />
+        <Route path="/projects/:id" element={<ProjectDetailPage projects={projects} token={token} onProjectsRefresh={refetch} />} />
+        <Route path="/calendar" element={<CalendarPage projects={projects} token={token} onProjectsRefresh={refetch} />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
         {user.role === 'admin' && (
           <Route path="/users" element={<UsersPage token={token} />} />

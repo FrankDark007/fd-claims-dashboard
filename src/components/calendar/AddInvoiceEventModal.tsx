@@ -1,4 +1,4 @@
-import { useState, Fragment } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react'
 import { CurrencyDollarIcon } from '@heroicons/react/24/outline'
 import type { Project } from '../../types/claim'
@@ -9,12 +9,23 @@ interface AddInvoiceEventModalProps {
   projects: Project[]
   preselectedProjectId?: string
   preselectedDate?: string
+  initialEvent?: {
+    projectId: string
+    type: 'sent' | 'reminder' | 'paid' | 'disputed'
+    date: string
+    amount: number
+    recipient?: string
+    notes?: string
+  } | null
+  title?: string
+  submitLabel?: string
   onSubmit: (params: {
     projectId: string
     type: 'sent' | 'reminder' | 'paid' | 'disputed'
     date: string
     amount: number
     notes?: string
+    recipient?: string
   }) => Promise<void>
 }
 
@@ -31,18 +42,59 @@ export default function AddInvoiceEventModal({
   projects,
   preselectedProjectId,
   preselectedDate,
+  initialEvent = null,
+  title = 'Add Invoice Event',
+  submitLabel = 'Add Event',
   onSubmit,
 }: AddInvoiceEventModalProps) {
   const [projectId, setProjectId] = useState(preselectedProjectId || '')
   const [type, setType] = useState<'sent' | 'reminder' | 'paid' | 'disputed'>('sent')
   const [date, setDate] = useState(preselectedDate || new Date().toISOString().split('T')[0])
   const [amount, setAmount] = useState('')
+  const [recipient, setRecipient] = useState('')
   const [notes, setNotes] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Auto-fill amount from selected project
   const selectedProject = projects.find(p => p.id === projectId)
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    if (initialEvent) {
+      setProjectId(initialEvent.projectId)
+      setType(initialEvent.type)
+      setDate(initialEvent.date)
+      setAmount(initialEvent.amount.toString())
+      setRecipient(initialEvent.recipient || '')
+      setNotes(initialEvent.notes || '')
+      return
+    }
+
+    setProjectId(preselectedProjectId || '')
+    setType('sent')
+    setDate(preselectedDate || new Date().toISOString().split('T')[0])
+    setRecipient('')
+    setNotes('')
+    setAmount('')
+  }, [open, preselectedProjectId, preselectedDate, initialEvent])
+
+  useEffect(() => {
+    if (!open || !selectedProject) {
+      return
+    }
+
+    if (!amount && selectedProject.amount) {
+      setAmount(selectedProject.amount.toString())
+    }
+
+    if (!recipient) {
+      setRecipient(selectedProject.adjusterEmail || selectedProject.adjusterName || selectedProject.pmEmail || '')
+    }
+  }, [open, selectedProject, amount, recipient])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,12 +108,14 @@ export default function AddInvoiceEventModal({
         type,
         date,
         amount: parseFloat(amount),
+        recipient: recipient || undefined,
         notes: notes || undefined,
       })
       // Reset form
       setProjectId('')
       setType('sent')
       setAmount('')
+      setRecipient('')
       setNotes('')
       onClose()
     } catch (err: unknown) {
@@ -107,7 +161,7 @@ export default function AddInvoiceEventModal({
                   <CurrencyDollarIcon className="size-6 text-green-600" />
                 </div>
                 <DialogTitle as="h3" className="text-base font-semibold text-gray-900 text-center mb-5">
-                  Add Invoice Event
+                  {title}
                 </DialogTitle>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -120,11 +174,15 @@ export default function AddInvoiceEventModal({
                       id="event-project"
                       value={projectId}
                       onChange={(e) => {
+                        if (initialEvent) {
+                          return
+                        }
                         setProjectId(e.target.value)
                         const p = projects.find(proj => proj.id === e.target.value)
                         if (p?.amount && !amount) setAmount(p.amount.toString())
                       }}
                       required
+                      disabled={Boolean(initialEvent)}
                       className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-primary focus:outline-none focus:ring-primary"
                     >
                       <option value="">Select a project...</option>
@@ -196,6 +254,20 @@ export default function AddInvoiceEventModal({
                     </div>
                   </div>
 
+                  <div>
+                    <label htmlFor="event-recipient" className="block text-sm font-medium text-gray-700">
+                      Recipient <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <input
+                      id="event-recipient"
+                      type="text"
+                      value={recipient}
+                      onChange={(e) => setRecipient(e.target.value)}
+                      placeholder="Adjuster, PM, carrier, or client"
+                      className="mt-1 block w-full rounded-md border-gray-300 py-2 text-sm focus:border-primary focus:outline-none focus:ring-primary"
+                    />
+                  </div>
+
                   {/* Notes */}
                   <div>
                     <label htmlFor="event-notes" className="block text-sm font-medium text-gray-700">
@@ -228,7 +300,7 @@ export default function AddInvoiceEventModal({
                       disabled={submitting || !projectId || !amount}
                       className="flex-1 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50"
                     >
-                      {submitting ? 'Saving...' : 'Add Event'}
+                      {submitting ? 'Saving...' : submitLabel}
                     </button>
                   </div>
                 </form>

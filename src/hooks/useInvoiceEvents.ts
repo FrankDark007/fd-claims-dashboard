@@ -8,6 +8,7 @@ export interface InvoiceEventWithProject {
   amount: number
   notes: string
   createdBy: string
+  createdAt: string
   recipient?: string
 }
 
@@ -39,6 +40,7 @@ export function useInvoiceEvents(token: string) {
     date: string
     amount: number
     notes?: string
+    recipient?: string
   }) => {
     const res = await fetch('/api/invoice-events', {
       method: 'POST',
@@ -55,13 +57,68 @@ export function useInvoiceEvents(token: string) {
     }
 
     const data = await res.json() as { event: InvoiceEventWithProject }
-    setEvents(prev => [data.event, ...prev])
+    setEvents(prev => [data.event, ...prev].sort(sortInvoiceEvents))
     return data.event
+  }, [token])
+
+  const updateEvent = useCallback(async (
+    projectId: string,
+    eventId: string,
+    params: {
+      type?: 'sent' | 'reminder' | 'paid' | 'disputed'
+      date?: string
+      amount?: number
+      notes?: string
+      recipient?: string
+    }
+  ) => {
+    const res = await fetch(`/api/invoice-events/${projectId}/${eventId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params),
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to update event' }))
+      throw new Error((err as { error?: string }).error || 'Failed to update event')
+    }
+
+    const data = await res.json() as { event: InvoiceEventWithProject }
+    setEvents((prev) => prev.map((event) => (
+      event.id === eventId && event.projectId === projectId ? data.event : event
+    )).sort(sortInvoiceEvents))
+    return data.event
+  }, [token])
+
+  const removeEvent = useCallback(async (projectId: string, eventId: string) => {
+    const res = await fetch(`/api/invoice-events/${projectId}/${eventId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Failed to delete event' }))
+      throw new Error((err as { error?: string }).error || 'Failed to delete event')
+    }
+
+    setEvents((prev) => prev.filter((event) => !(event.id === eventId && event.projectId === projectId)))
   }, [token])
 
   useEffect(() => {
     fetchEvents()
   }, [fetchEvents])
 
-  return { events, loading, error, addEvent, refetch: fetchEvents }
+  return { events, loading, error, addEvent, updateEvent, removeEvent, refetch: fetchEvents }
+}
+
+function sortInvoiceEvents(a: InvoiceEventWithProject, b: InvoiceEventWithProject) {
+  const dateDiff = new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime()
+  if (dateDiff !== 0) {
+    return dateDiff
+  }
+
+  return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
 }

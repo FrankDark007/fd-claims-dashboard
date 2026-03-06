@@ -22,6 +22,7 @@ import EmailTab from '../components/project/EmailTab'
 interface ProjectDetailPageProps {
   projects: Project[]
   token: string
+  onProjectsRefresh: () => Promise<void>
 }
 
 const tabs = [
@@ -33,7 +34,7 @@ const tabs = [
   { name: 'Email', id: 'email' },
 ]
 
-export default function ProjectDetailPage({ projects, token }: ProjectDetailPageProps) {
+export default function ProjectDetailPage({ projects, token, onProjectsRefresh }: ProjectDetailPageProps) {
   const { id } = useParams<{ id: string }>()
   const {
     project: hydratedProject,
@@ -61,22 +62,22 @@ export default function ProjectDetailPage({ projects, token }: ProjectDetailPage
 
   const handleProjectSave = async (input: Parameters<typeof saveProject>[0]) => {
     await saveProject(input)
-    await refetch()
+    await Promise.all([refetch(), onProjectsRefresh()])
   }
 
   const handleAddInvoiceEvent = async (input: Parameters<typeof addInvoiceEvent>[0]) => {
     await addInvoiceEvent(input)
-    await refetchProject()
+    await Promise.all([refetchProject(), onProjectsRefresh()])
   }
 
   const handleUpdateInvoiceEvent = async (eventId: string, input: Parameters<typeof updateInvoiceEvent>[1]) => {
     await updateInvoiceEvent(eventId, input)
-    await refetchProject()
+    await Promise.all([refetchProject(), onProjectsRefresh()])
   }
 
   const handleDeleteInvoiceEvent = async (eventId: string) => {
     await removeInvoiceEvent(eventId)
-    await refetchProject()
+    await Promise.all([refetchProject(), onProjectsRefresh()])
   }
 
   if (!project && projectLoading) {

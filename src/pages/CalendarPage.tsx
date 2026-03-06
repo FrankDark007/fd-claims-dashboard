@@ -8,8 +8,10 @@ import {
 import {
   CalendarDaysIcon,
   CurrencyDollarIcon,
+  PencilSquareIcon,
   PaperAirplaneIcon,
   BellAlertIcon,
+  TrashIcon,
   ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import type { Project } from '../types/claim'
@@ -20,6 +22,7 @@ import AddInvoiceEventModal from '../components/calendar/AddInvoiceEventModal'
 interface CalendarPageProps {
   projects: Project[]
   token: string
+  onProjectsRefresh: () => Promise<void>
 }
 
 function classNames(...classes: (string | boolean | undefined)[]) {
@@ -87,14 +90,15 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-export default function CalendarPage({ projects, token }: CalendarPageProps) {
+export default function CalendarPage({ projects, token, onProjectsRefresh }: CalendarPageProps) {
   const today = new Date()
   const [currentYear, setCurrentYear] = useState(today.getFullYear())
   const [currentMonth, setCurrentMonth] = useState(today.getMonth())
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | undefined>()
+  const [editingEvent, setEditingEvent] = useState<InvoiceEventWithProject | null>(null)
 
-  const { events, loading, addEvent } = useInvoiceEvents(token)
+  const { events, loading, addEvent, updateEvent, removeEvent } = useInvoiceEvents(token)
 
   // Build calendar data
   const days = useMemo(() => {
@@ -172,6 +176,7 @@ export default function CalendarPage({ projects, token }: CalendarPageProps) {
   }
 
   const handleDayClick = (dateStr: string) => {
+    setEditingEvent(null)
     setSelectedDate(dateStr)
     setShowAddModal(true)
   }
@@ -182,8 +187,27 @@ export default function CalendarPage({ projects, token }: CalendarPageProps) {
     date: string
     amount: number
     notes?: string
+    recipient?: string
   }) => {
-    await addEvent(params)
+    if (editingEvent) {
+      await updateEvent(editingEvent.projectId, editingEvent.id, {
+        type: params.type,
+        date: params.date,
+        amount: params.amount,
+        notes: params.notes,
+        recipient: params.recipient,
+      })
+    } else {
+      await addEvent(params)
+    }
+
+    await onProjectsRefresh()
+    setEditingEvent(null)
+  }
+
+  const handleDeleteEvent = async (event: InvoiceEventWithProject) => {
+    await removeEvent(event.projectId, event.id)
+    await onProjectsRefresh()
   }
 
   return (
@@ -195,7 +219,11 @@ export default function CalendarPage({ projects, token }: CalendarPageProps) {
           <p className="text-sm text-secondary mt-1">Track invoice events across all projects</p>
         </div>
         <button
-          onClick={() => { setSelectedDate(undefined); setShowAddModal(true) }}
+          onClick={() => {
+            setEditingEvent(null)
+            setSelectedDate(undefined)
+            setShowAddModal(true)
+          }}
           className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
         >
           <PlusIcon className="size-4" />
@@ -379,12 +407,35 @@ export default function CalendarPage({ projects, token }: CalendarPageProps) {
                           <p className="text-xs text-gray-500">
                             ${event.amount.toLocaleString()} &middot;{' '}
                             {new Date(event.eventDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {event.recipient && ` • ${event.recipient}`}
                             {event.notes && ` — ${event.notes}`}
                           </p>
                         </div>
-                        <span className="shrink-0 text-sm font-semibold text-gray-900">
-                          ${event.amount.toLocaleString()}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">
+                            ${event.amount.toLocaleString()}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingEvent(event)
+                              setSelectedDate(event.eventDate)
+                              setShowAddModal(true)
+                            }}
+                            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-primary"
+                            title="Edit event"
+                          >
+                            <PencilSquareIcon className="size-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDeleteEvent(event)}
+                            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-red-600"
+                            title="Delete event"
+                          >
+                            <TrashIcon className="size-4" />
+                          </button>
+                        </div>
                       </li>
                     )
                   })}
@@ -398,9 +449,22 @@ export default function CalendarPage({ projects, token }: CalendarPageProps) {
       {/* Add Event Modal */}
       <AddInvoiceEventModal
         open={showAddModal}
-        onClose={() => setShowAddModal(false)}
+        onClose={() => {
+          setShowAddModal(false)
+          setEditingEvent(null)
+        }}
         projects={projects}
         preselectedDate={selectedDate}
+        initialEvent={editingEvent ? {
+          projectId: editingEvent.projectId,
+          type: editingEvent.type,
+          date: editingEvent.eventDate,
+          amount: editingEvent.amount,
+          recipient: editingEvent.recipient,
+          notes: editingEvent.notes,
+        } : null}
+        title={editingEvent ? 'Edit Invoice Event' : 'Add Invoice Event'}
+        submitLabel={editingEvent ? 'Save Event' : 'Add Event'}
         onSubmit={handleAddEvent}
       />
     </div>
