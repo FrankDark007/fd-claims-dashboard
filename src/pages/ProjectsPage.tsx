@@ -21,10 +21,20 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
 
   const filtered = projects
     .filter((project) => {
-      const matchesSearch =
-      project.clientName.toLowerCase().includes(search.toLowerCase()) ||
-      project.projectName.toLowerCase().includes(search.toLowerCase()) ||
-      project.xactimateNumber.toLowerCase().includes(search.toLowerCase())
+      const searchTerm = search.toLowerCase()
+      const searchableFields = [
+        project.clientName,
+        project.projectName,
+        project.xactimateNumber,
+        project.claimNumber,
+        project.carrier,
+        project.projectManagerName,
+        project.pmEmail,
+        project.adjusterName,
+        project.adjusterEmail,
+        project.invoiceId?.toString() ?? '',
+      ]
+      const matchesSearch = searchableFields.some((field) => field.toLowerCase().includes(searchTerm))
       const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
 
       const followUpDate = project.nextFollowUpDate ?? project.dueDate
