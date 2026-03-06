@@ -99,6 +99,20 @@ async function main() {
       eventList.events.push(createdEvent.event)
       console.log(`Added ${event.type} event for ${seedProject.claimNumber} on ${event.date}`)
     }
+
+    for (const existingEvent of existingEvents) {
+      const shouldKeep = seedProject.events.some((event) => isMatchingEvent(existingEvent, event))
+      if (shouldKeep) {
+        continue
+      }
+
+      await request(`/api/invoice-events/${projectId}/${existingEvent.id}`, {
+        method: 'DELETE',
+        headers,
+      })
+      eventList.events = eventList.events.filter((event) => event.id !== existingEvent.id)
+      console.log(`Removed extra ${existingEvent.type} event for ${seedProject.claimNumber} on ${existingEvent.eventDate}`)
+    }
   }
 }
 

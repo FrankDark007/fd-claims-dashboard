@@ -13,6 +13,7 @@ import {
 import {
   Bars3Icon,
   CalendarIcon,
+  ChartBarIcon,
   Cog6ToothIcon,
   FolderIcon,
   HomeIcon,
@@ -30,6 +31,7 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: HomeIcon },
   { name: 'Projects', href: '/projects', icon: FolderIcon },
   { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
+  { name: 'Reports', href: '/reports', icon: ChartBarIcon },
 ]
 
 const adminNavigation = [

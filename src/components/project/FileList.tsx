@@ -73,8 +73,20 @@ function formatDate(dateStr: string) {
 export default function FileList({ files, projectId, token, onDelete }: FileListProps) {
   const [shareFile, setShareFile] = useState<{ id: string; name: string } | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState<string>('all')
 
-  const grouped = files.reduce<Record<string, ProjectFile[]>>((acc, file) => {
+  const visibleFiles = files.filter((file) => {
+    const matchesCategory = categoryFilter === 'all' || file.category === categoryFilter
+    const searchTerm = search.trim().toLowerCase()
+    const matchesSearch = searchTerm.length === 0
+      || file.originalName.toLowerCase().includes(searchTerm)
+      || file.uploadedBy.toLowerCase().includes(searchTerm)
+
+    return matchesCategory && matchesSearch
+  })
+
+  const grouped = visibleFiles.reduce<Record<string, ProjectFile[]>>((acc, file) => {
     const cat = file.category || 'other'
     if (!acc[cat]) acc[cat] = []
     acc[cat].push(file)
@@ -121,6 +133,35 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
   return (
     <>
       <div className="space-y-6">
+        <div className="flex flex-col gap-3 rounded-2xl border border-gray-100 bg-gray-50 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex-1">
+            <label htmlFor="file-search" className="sr-only">Search files</label>
+            <input
+              id="file-search"
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search file names or uploader..."
+              className="w-full rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={categoryFilter}
+              onChange={(event) => setCategoryFilter(event.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="all">All categories</option>
+              {categories.map((category) => (
+                <option key={category} value={category}>
+                  {CATEGORY_CONFIG[category].label}
+                </option>
+              ))}
+            </select>
+            <span className="text-sm text-secondary">{visibleFiles.length} files</span>
+          </div>
+        </div>
+
         {categories.map((cat) => {
           const catFiles = grouped[cat]
           if (!catFiles || catFiles.length === 0) return null
@@ -182,6 +223,12 @@ export default function FileList({ files, projectId, token, onDelete }: FileList
             </div>
           )
         })}
+
+        {visibleFiles.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-12 text-center text-sm text-secondary">
+            No files match the current search or category filter.
+          </div>
+        )}
       </div>
 
       {shareFile && (

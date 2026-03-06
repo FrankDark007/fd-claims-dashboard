@@ -1,10 +1,12 @@
 import { useState, useCallback } from 'react'
 import { DocumentArrowUpIcon, PlusIcon } from '@heroicons/react/24/outline'
+import type { Project } from '../../shared/projects'
 import type { ProjectFile } from '../../hooks/useProject'
 import FileUploader from './FileUploader'
 import FileList from './FileList'
 
 interface FilesTabProps {
+  project: Project
   files: ProjectFile[]
   loading: boolean
   projectId: string
@@ -12,8 +14,17 @@ interface FilesTabProps {
   onRefresh: () => void
 }
 
-export default function FilesTab({ files, loading, projectId, token, onRefresh }: FilesTabProps) {
+const CHECKLIST_ITEMS = [
+  { key: 'contracts', label: 'Contract', statusField: 'contractStatus' },
+  { key: 'cocs', label: 'Certificate of Completion', statusField: 'cocStatus' },
+  { key: 'drylogs', label: 'Dry Logs', statusField: 'drylogStatus' },
+  { key: 'invoices', label: 'Invoice Backup', statusField: 'finalInvoiceStatus' },
+  { key: 'photos', label: 'Photos / Matterport', statusField: 'matterportStatus' },
+] as const
+
+export default function FilesTab({ project, files, loading, projectId, token, onRefresh }: FilesTabProps) {
   const [showUploader, setShowUploader] = useState(false)
+  const [uploadCategory, setUploadCategory] = useState<string>('other')
 
   const handleUploadComplete = useCallback(() => {
     setShowUploader(false)
@@ -32,21 +43,60 @@ export default function FilesTab({ files, loading, projectId, token, onRefresh }
     )
   }
 
+  const fileCounts = files.reduce<Record<string, number>>((acc, file) => {
+    acc[file.category] = (acc[file.category] ?? 0) + 1
+    return acc
+  }, {})
+
   return (
     <div className="space-y-6">
-      {/* Header with upload button */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold text-gray-900">
-          Files {files.length > 0 && <span className="text-sm font-normal text-gray-500">({files.length})</span>}
-        </h3>
-        <button
-          onClick={() => setShowUploader(!showUploader)}
-          className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
-        >
-          <PlusIcon className="size-4" />
-          Upload Files
-        </button>
-      </div>
+      <section className="rounded-2xl bg-white p-6 shadow">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Files {files.length > 0 && <span className="text-sm font-normal text-gray-500">({files.length})</span>}
+            </h3>
+            <p className="mt-1 text-sm text-secondary">
+              Track required documents, upload by category, and share project files with expiring links.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowUploader(!showUploader)}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
+          >
+            <PlusIcon className="size-4" />
+            Upload Files
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {CHECKLIST_ITEMS.map((item) => {
+            const count = fileCounts[item.key] ?? 0
+            const status = project[item.statusField]
+            const statusTone = count > 0 || (status && status !== 'Missing' && status !== 'Not Started')
+              ? 'border-green-200 bg-green-50'
+              : 'border-amber-200 bg-amber-50'
+
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  setUploadCategory(item.key)
+                  setShowUploader(true)
+                }}
+                className={`rounded-2xl border p-4 text-left transition hover:shadow-sm ${statusTone}`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">{item.label}</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{count}</p>
+                <p className="mt-1 text-sm text-secondary">
+                  {status ? `Status: ${status}` : 'Upload missing items'}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      </section>
 
       {/* Uploader (toggled) */}
       {showUploader && (
@@ -55,6 +105,7 @@ export default function FilesTab({ files, loading, projectId, token, onRefresh }
             projectId={projectId}
             token={token}
             onUploadComplete={handleUploadComplete}
+            initialCategory={uploadCategory}
           />
         </div>
       )}

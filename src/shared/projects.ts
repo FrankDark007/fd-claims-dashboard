@@ -135,6 +135,16 @@ export interface ProjectDataResponse {
   invoiceEvents: InvoiceEvent[]
 }
 
+export interface ProjectTaskWriteInput {
+  id?: string
+  title?: string
+  completed?: boolean
+  assignee?: string
+  dueDate?: string | null
+  notes?: string
+  sortOrder?: number
+}
+
 export interface ProjectWriteInput {
   invoiceId?: number | null
   clientName?: string
@@ -276,6 +286,40 @@ export function normalizeFileCategory(value: unknown): FileCategory {
 
 export function normalizeInvoiceEventType(value: unknown): InvoiceEventType | null {
   return isValueInList(value, INVOICE_EVENT_TYPES) ? value : null
+}
+
+export function buildProjectTaskTemplate(projectType: ProjectType | null): ProjectTaskWriteInput[] {
+  const baseChecklist: ProjectTaskWriteInput[] = [
+    { title: 'Confirm PM and adjuster contact info', completed: false },
+    { title: 'Review document checklist for missing items', completed: false },
+    { title: 'Log billing or collections next step', completed: false },
+  ]
+
+  if (projectType === 'Water Mitigation') {
+    return [
+      { title: 'Verify dry log collection cadence', completed: false },
+      { title: 'Confirm Matterport / photo capture is complete', completed: false },
+      ...baseChecklist,
+    ]
+  }
+
+  if (projectType === 'Pack-out') {
+    return [
+      { title: 'Confirm inventory and pack-out scope are documented', completed: false },
+      { title: 'Verify storage / return scheduling notes', completed: false },
+      ...baseChecklist,
+    ]
+  }
+
+  if (projectType === 'Mold Remediation') {
+    return [
+      { title: 'Review remediation scope and containment notes', completed: false },
+      { title: 'Confirm clearance or post-work testing requirements', completed: false },
+      ...baseChecklist,
+    ]
+  }
+
+  return baseChecklist
 }
 
 export function computeInvoiceStatus(

@@ -1,10 +1,11 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { CloudArrowUpIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 interface FileUploaderProps {
   projectId: string
   token: string
   onUploadComplete: () => void
+  initialCategory?: string
 }
 
 const CATEGORIES = [
@@ -17,13 +18,17 @@ const CATEGORIES = [
   { value: 'other', label: 'Other Documents' },
 ] as const
 
-export default function FileUploader({ projectId, token, onUploadComplete }: FileUploaderProps) {
+export default function FileUploader({ projectId, token, onUploadComplete, initialCategory = 'other' }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
-  const [category, setCategory] = useState<string>('other')
+  const [category, setCategory] = useState<string>(initialCategory)
   const [uploading, setUploading] = useState(false)
   const [uploadQueue, setUploadQueue] = useState<File[]>([])
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    setCategory(initialCategory)
+  }, [initialCategory])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()

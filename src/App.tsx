@@ -9,6 +9,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import UsersPage from './pages/UsersPage'
 import CalendarPage from './pages/CalendarPage'
+import ReportsPage from './pages/ReportsPage'
 
 function App() {
   const auth = useAuth()
@@ -47,6 +48,7 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
         <Route path="/projects" element={<ProjectsPage projects={projects} loading={loading} token={token} onRefresh={refetch} />} />
         <Route path="/projects/:id" element={<ProjectDetailPage projects={projects} token={token} onProjectsRefresh={refetch} />} />
         <Route path="/calendar" element={<CalendarPage projects={projects} token={token} onProjectsRefresh={refetch} />} />
+        <Route path="/reports" element={<ReportsPage projects={projects} loading={loading} />} />
         <Route path="/settings" element={<PlaceholderPage title="Settings" />} />
         {user.role === 'admin' && (
           <Route path="/users" element={<UsersPage token={token} />} />

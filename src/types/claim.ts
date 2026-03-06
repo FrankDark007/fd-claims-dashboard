@@ -8,6 +8,7 @@ export type {
   MatterportStatus,
   Project,
   ProjectStatus,
+  ProjectTask,
   ProjectType,
   RewriteStatus,
   SessionUser as User,

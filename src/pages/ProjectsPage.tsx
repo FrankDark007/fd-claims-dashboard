@@ -15,6 +15,8 @@ interface ProjectsPageProps {
 export default function ProjectsPage({ projects, loading, token, onRefresh }: ProjectsPageProps) {
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterProjectStatus, setFilterProjectStatus] = useState<string>('all')
+  const [filterType, setFilterType] = useState<string>('all')
   const [filterCollections, setFilterCollections] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
@@ -36,6 +38,8 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
       ]
       const matchesSearch = searchableFields.some((field) => field.toLowerCase().includes(searchTerm))
       const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
+      const matchesProjectStatus = filterProjectStatus === 'all' || project.projectStatus === filterProjectStatus
+      const matchesType = filterType === 'all' || project.projectType === filterType
 
       const followUpDate = project.nextFollowUpDate ?? project.dueDate
       const matchesCollections = (() => {
@@ -58,7 +62,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
         return true
       })()
 
-      return matchesSearch && matchesStatus && matchesCollections
+      return matchesSearch && matchesStatus && matchesProjectStatus && matchesType && matchesCollections
     })
     .sort((a, b) => {
       const aFollowUp = a.nextFollowUpDate ?? a.dueDate ?? '9999-12-31'
@@ -125,6 +129,27 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
           <option value="Sent">Sent</option>
           <option value="Paid">Paid</option>
           <option value="Overdue">Overdue</option>
+        </select>
+        <select
+          value={filterProjectStatus}
+          onChange={(e) => setFilterProjectStatus(e.target.value)}
+          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="all">All Project States</option>
+          <option value="Active">Active</option>
+          <option value="On Hold">On Hold</option>
+          <option value="Complete">Complete</option>
+          <option value="Archived">Archived</option>
+        </select>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="rounded-lg border border-faint bg-surface px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="all">All Types</option>
+          <option value="Water Mitigation">Water Mitigation</option>
+          <option value="Pack-out">Pack-out</option>
+          <option value="Mold Remediation">Mold Remediation</option>
         </select>
         <select
           value={filterCollections}

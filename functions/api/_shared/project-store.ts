@@ -23,6 +23,8 @@ import type {
   Project,
   ProjectFile,
   ProjectNote,
+  ProjectTask,
+  ProjectTaskWriteInput,
   ProjectWriteInput,
 } from '../../../src/shared/projects'
 
@@ -93,6 +95,19 @@ interface ProjectNoteRecord {
   body: string
   pinned: number
   createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+interface ProjectTaskRecord {
+  id: string
+  projectId: string
+  title: string
+  completed: number
+  assignee: string
+  dueDate: string | null
+  notes: string
+  sortOrder: number
   createdAt: string
   updatedAt: string
 }
@@ -174,6 +189,21 @@ const PROJECT_NOTE_SELECT = `
     created_at AS createdAt,
     updated_at AS updatedAt
   FROM project_notes
+`
+
+const PROJECT_TASK_SELECT = `
+  SELECT
+    id,
+    project_id AS projectId,
+    title,
+    completed,
+    assignee,
+    due_date AS dueDate,
+    notes,
+    sort_order AS sortOrder,
+    created_at AS createdAt,
+    updated_at AS updatedAt
+  FROM project_tasks
 `
 
 const PROJECT_SCHEMA_STATEMENTS = [
@@ -403,6 +433,21 @@ function mapProjectNoteRecord(record: ProjectNoteRecord): ProjectNote {
   }
 }
 
+function mapProjectTaskRecord(record: ProjectTaskRecord): ProjectTask {
+  return {
+    id: record.id,
+    projectId: record.projectId,
+    title: record.title,
+    completed: normalizeBoolean(record.completed),
+    assignee: record.assignee ?? '',
+    dueDate: record.dueDate,
+    notes: record.notes ?? '',
+    sortOrder: record.sortOrder ?? 0,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }
+}
+
 function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: ProjectRecord): ProjectRecord {
   const invoiceSentDate = input.invoiceSentDate !== undefined
     ? normalizeDateOnly(input.invoiceSentDate)
@@ -514,7 +559,7 @@ async function getProjectRecord(db: D1Database, projectId: string): Promise<Proj
 async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): Promise<void> {
   await withProjectSchema(db, async () => {
     await db.prepare(`
-      INSERT OR REPLACE INTO projects (
+      INSERT INTO projects (
         id, invoice_id, client_name, project_name, project_type, project_status, invoice_status,
         amount, contract_status, coc_status, final_invoice_status, drylog_status, rewrite_status,
         matterport_status, company_cam_url, drive_folder_url, xactimate_number, claim_number,
@@ -522,6 +567,38 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
         adjuster_phone, invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
         notes, done, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        invoice_id = excluded.invoice_id,
+        client_name = excluded.client_name,
+        project_name = excluded.project_name,
+        project_type = excluded.project_type,
+        project_status = excluded.project_status,
+        invoice_status = excluded.invoice_status,
+        amount = excluded.amount,
+        contract_status = excluded.contract_status,
+        coc_status = excluded.coc_status,
+        final_invoice_status = excluded.final_invoice_status,
+        drylog_status = excluded.drylog_status,
+        rewrite_status = excluded.rewrite_status,
+        matterport_status = excluded.matterport_status,
+        company_cam_url = excluded.company_cam_url,
+        drive_folder_url = excluded.drive_folder_url,
+        xactimate_number = excluded.xactimate_number,
+        claim_number = excluded.claim_number,
+        carrier = excluded.carrier,
+        project_manager_name = excluded.project_manager_name,
+        pm_email = excluded.pm_email,
+        pm_phone = excluded.pm_phone,
+        adjuster_name = excluded.adjuster_name,
+        adjuster_email = excluded.adjuster_email,
+        adjuster_phone = excluded.adjuster_phone,
+        invoice_sent_date = excluded.invoice_sent_date,
+        due_date = excluded.due_date,
+        next_follow_up_date = excluded.next_follow_up_date,
+        payment_received_date = excluded.payment_received_date,
+        notes = excluded.notes,
+        done = excluded.done,
+        updated_at = excluded.updated_at
     `).bind(
       project.id,
       project.invoiceId,
@@ -668,6 +745,75 @@ export async function listProjectNotes(db: D1Database, projectId: string): Promi
     ).bind(projectId).all<ProjectNoteRecord>()
 
     return (result.results ?? []).map(mapProjectNoteRecord)
+  })
+}
+
+export async function listProjectTasks(db: D1Database, projectId: string): Promise<ProjectTask[]> {
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(
+      `${PROJECT_TASK_SELECT} WHERE project_id = ? ORDER BY sort_order ASC, created_at ASC`
+    ).bind(projectId).all<ProjectTaskRecord>()
+
+    return (result.results ?? []).map(mapProjectTaskRecord)
+  })
+}
+
+export async function replaceProjectTasks(
+  db: D1Database,
+  projectId: string,
+  tasks: ProjectTaskWriteInput[],
+): Promise<ProjectTask[]> {
+  return withProjectSchema(db, async () => {
+    const existingProject = await getProjectRecord(db, projectId)
+    if (!existingProject) {
+      throw new Error('Project not found')
+    }
+
+    const existingTasks = await listProjectTasks(db, projectId)
+    const existingById = new Map(existingTasks.map((task) => [task.id, task]))
+
+    await db.prepare('DELETE FROM project_tasks WHERE project_id = ?').bind(projectId).run()
+
+    const normalizedTasks = tasks
+      .map((task, index) => {
+        const existing = task.id ? existingById.get(task.id) : null
+        const title = normalizeOptionalText(task.title)
+
+        return {
+          id: existing?.id ?? task.id ?? crypto.randomUUID(),
+          projectId,
+          title,
+          completed: normalizeBoolean(task.completed),
+          assignee: normalizeOptionalText(task.assignee),
+          dueDate: normalizeDateOnly(task.dueDate),
+          notes: normalizeOptionalText(task.notes),
+          sortOrder: typeof task.sortOrder === 'number' && Number.isFinite(task.sortOrder) ? task.sortOrder : index,
+          createdAt: existing?.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+      })
+      .filter((task) => task.title.length > 0)
+
+    for (const task of normalizedTasks) {
+      await db.prepare(`
+        INSERT INTO project_tasks (
+          id, project_id, title, completed, assignee, due_date, notes, sort_order, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        task.id,
+        task.projectId,
+        task.title,
+        task.completed ? 1 : 0,
+        task.assignee,
+        task.dueDate,
+        task.notes,
+        task.sortOrder,
+        task.createdAt,
+        task.updatedAt,
+      ).run()
+    }
+
+    return listProjectTasks(db, projectId)
   })
 }
 

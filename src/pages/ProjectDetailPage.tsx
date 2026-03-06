@@ -10,6 +10,7 @@ import {
 import type { Project } from '../types/claim'
 import { useProject, useProjectData } from '../hooks/useProject'
 import { useProjectNotes } from '../hooks/useProjectNotes'
+import { useProjectTasks } from '../hooks/useProjectTasks'
 import StatusPill from '../components/StatusPill'
 import OverviewTab from '../components/project/OverviewTab'
 import FinancialsTab from '../components/project/FinancialsTab'
@@ -18,6 +19,7 @@ import FilesTab from '../components/project/FilesTab'
 import TimelineTab from '../components/project/TimelineTab'
 import NotesTab from '../components/project/NotesTab'
 import EmailTab from '../components/project/EmailTab'
+import TasksTab from '../components/project/TasksTab'
 
 interface ProjectDetailPageProps {
   projects: Project[]
@@ -30,6 +32,7 @@ const tabs = [
   { name: 'Financials', id: 'financials' },
   { name: 'Files', id: 'files' },
   { name: 'Timeline', id: 'timeline' },
+  { name: 'Tasks', id: 'tasks' },
   { name: 'Notes', id: 'notes' },
   { name: 'Email', id: 'email' },
 ]
@@ -58,6 +61,11 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
     updateNote,
     removeNote,
   } = useProjectNotes(id, token)
+  const {
+    tasks,
+    loading: tasksLoading,
+    saveTasks,
+  } = useProjectTasks(id, token)
   const [activeTab, setActiveTab] = useState('overview')
 
   const handleProjectSave = async (input: Parameters<typeof saveProject>[0]) => {
@@ -78,6 +86,10 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
   const handleDeleteInvoiceEvent = async (eventId: string) => {
     await removeInvoiceEvent(eventId)
     await Promise.all([refetchProject(), onProjectsRefresh()])
+  }
+
+  const handleSaveTasks = async (input: Parameters<typeof saveTasks>[0]) => {
+    await saveTasks(input)
   }
 
   if (!project && projectLoading) {
@@ -259,7 +271,16 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
             onCreateInvoiceEvent={handleAddInvoiceEvent}
           />
         )}
-        {activeTab === 'files' && <FilesTab files={data.files} loading={dataLoading} projectId={id!} token={token} onRefresh={refetch} />}
+        {activeTab === 'files' && (
+          <FilesTab
+            project={project}
+            files={data.files}
+            loading={dataLoading}
+            projectId={id!}
+            token={token}
+            onRefresh={refetch}
+          />
+        )}
         {activeTab === 'timeline' && (
           <TimelineTab
             project={project}
@@ -268,6 +289,14 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
             onCreateInvoiceEvent={handleAddInvoiceEvent}
             onUpdateInvoiceEvent={handleUpdateInvoiceEvent}
             onDeleteInvoiceEvent={handleDeleteInvoiceEvent}
+          />
+        )}
+        {activeTab === 'tasks' && (
+          <TasksTab
+            projectType={project.projectType}
+            tasks={tasks}
+            loading={tasksLoading}
+            onSave={handleSaveTasks}
           />
         )}
         {activeTab === 'notes' && (

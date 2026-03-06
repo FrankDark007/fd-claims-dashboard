@@ -5,10 +5,10 @@ export type ProjectPayload = {
   projectStatus: 'Active' | 'On Hold' | 'Complete'
   invoiceStatus: 'Draft' | 'Sent' | 'Paid'
   amount: number
-  invoiceSentDate?: string
-  dueDate?: string
+  invoiceSentDate?: string | null
+  dueDate?: string | null
   nextFollowUpDate?: string | null
-  paymentReceivedDate?: string
+  paymentReceivedDate?: string | null
   claimNumber: string
   carrier: string
   projectManagerName: string
@@ -113,6 +113,10 @@ export const seedProjects: SeedProject[] = [
     projectStatus: 'On Hold',
     invoiceStatus: 'Draft',
     amount: 2150,
+    invoiceSentDate: null,
+    dueDate: null,
+    nextFollowUpDate: null,
+    paymentReceivedDate: null,
     claimNumber: 'QA-CLM-1003',
     carrier: 'Travelers',
     projectManagerName: 'Frank',
