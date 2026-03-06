@@ -24,7 +24,7 @@ const CHECKLIST_ITEMS = [
 
 export default function FilesTab({ project, files, loading, projectId, token, onRefresh }: FilesTabProps) {
   const [showUploader, setShowUploader] = useState(false)
-  const [uploadCategory, setUploadCategory] = useState<string>('other')
+  const [uploadCategory, setUploadCategory] = useState<string>('')
 
   const handleUploadComplete = useCallback(() => {
     setShowUploader(false)
@@ -61,7 +61,7 @@ export default function FilesTab({ project, files, loading, projectId, token, on
             </p>
           </div>
           <button
-            onClick={() => setShowUploader(!showUploader)}
+            onClick={() => { setUploadCategory(''); setShowUploader(!showUploader) }}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover"
           >
             <PlusIcon className="size-4" />

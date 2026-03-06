@@ -18,7 +18,7 @@ const CATEGORIES = [
   { value: 'other', label: 'Other Documents' },
 ] as const
 
-export default function FileUploader({ projectId, token, onUploadComplete, initialCategory = 'other' }: FileUploaderProps) {
+export default function FileUploader({ projectId, token, onUploadComplete, initialCategory = '' }: FileUploaderProps) {
   const [isDragging, setIsDragging] = useState(false)
   const [category, setCategory] = useState<string>(initialCategory)
   const [uploading, setUploading] = useState(false)
@@ -100,15 +100,19 @@ export default function FileUploader({ projectId, token, onUploadComplete, initi
     <div className="space-y-4">
       {/* Category selector */}
       <div>
-        <label htmlFor="file-category" className="block text-sm font-medium text-gray-700">
-          Category
+        <label htmlFor="file-category" className="block text-sm font-semibold text-gray-900">
+          Document Type <span className="text-red-500">*</span>
         </label>
+        <p className="mt-0.5 text-xs text-gray-500">Choose the correct category so files get sorted properly.</p>
         <select
           id="file-category"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="mt-1 block w-full rounded-md border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-primary focus:outline-none focus:ring-primary"
+          className={`mt-1.5 block w-full rounded-lg border py-2.5 pl-3 pr-10 text-sm font-medium focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary ${
+            category ? 'border-gray-300 text-gray-900' : 'border-amber-400 bg-amber-50 text-amber-700'
+          }`}
         >
+          <option value="">— Select document type —</option>
           {CATEGORIES.map((cat) => (
             <option key={cat.value} value={cat.value}>{cat.label}</option>
           ))}
@@ -166,7 +170,7 @@ export default function FileUploader({ projectId, token, onUploadComplete, initi
 
           <button
             onClick={uploadFiles}
-            disabled={uploading}
+            disabled={uploading || !category}
             className="inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-hover disabled:opacity-50"
           >
             {uploading ? (
