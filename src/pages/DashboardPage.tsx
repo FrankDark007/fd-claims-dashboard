@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import type { Project } from '../types/claim'
 import { computeStats, computeAging } from '../hooks/useProjects'
 import StatsCard from '../components/StatsCard'
@@ -27,7 +28,7 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
     }))
     .filter((item) => item.followUpDate !== null)
     .sort((a, b) => a.followUpDate!.localeCompare(b.followUpDate!))
-    .slice(0, 6)
+  const followUpQueuePreview = followUpQueue.slice(0, 6)
 
   const followUpTodayCount = followUpQueue.filter((item) => item.followUpDate === today).length
   const followUpThisWeekCount = followUpQueue.filter((item) => {
@@ -101,21 +102,21 @@ export default function DashboardPage({ projects, loading }: DashboardPageProps)
             <h2 className="text-lg font-semibold text-foreground">Collections Queue</h2>
             <p className="mt-1 text-sm text-secondary">Next projects that need a call, reminder, or payment check-in.</p>
           </div>
-          <a href="/projects" className="text-sm font-medium text-primary hover:text-primary-hover">
+          <Link to="/projects" className="text-sm font-medium text-primary hover:text-primary-hover">
             View project list
-          </a>
+          </Link>
         </div>
 
-        {followUpQueue.length === 0 ? (
+        {followUpQueuePreview.length === 0 ? (
           <div className="py-10 text-sm text-muted">No unpaid projects with follow-up dates are scheduled yet.</div>
         ) : (
           <ul className="mt-5 divide-y divide-gray-100">
-            {followUpQueue.map(({ project, followUpDate }) => (
+            {followUpQueuePreview.map(({ project, followUpDate }) => (
               <li key={project.id} className="flex items-center justify-between gap-4 py-4">
                 <div className="min-w-0">
-                  <a href={`/projects/${project.id}`} className="text-sm font-semibold text-foreground hover:text-primary">
+                  <Link to={`/projects/${project.id}`} className="text-sm font-semibold text-foreground hover:text-primary">
                     {project.clientName}
-                  </a>
+                  </Link>
                   <p className="mt-1 text-sm text-secondary">
                     {project.projectName || project.projectType || 'Uncategorized project'}
                   </p>
