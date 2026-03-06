@@ -268,7 +268,7 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     ? normalizeDateOnly(input.dueDate)
     : existing?.dueDate ?? null
 
-  if (input.invoiceSentDate !== undefined && input.dueDate === undefined) {
+  if (invoiceSentDate && !dueDate) {
     dueDate = defaultDueDate(invoiceSentDate)
   }
 
@@ -287,6 +287,19 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
   if (paymentReceivedDate) {
     invoiceStatus = 'Paid'
     nextFollowUpDate = null
+  } else if (invoiceSentDate && (invoiceStatus === null || invoiceStatus === 'Draft')) {
+    invoiceStatus = 'Sent'
+  } else if (!invoiceSentDate && invoiceStatus === 'Paid') {
+    invoiceStatus = 'Draft'
+  }
+
+  if (
+    input.paymentReceivedDate !== undefined &&
+    paymentReceivedDate === null &&
+    existing?.paymentReceivedDate &&
+    invoiceStatus === 'Paid'
+  ) {
+    invoiceStatus = invoiceSentDate ? 'Sent' : 'Draft'
   }
 
   if (!existing && !nextFollowUpDate && dueDate) {
