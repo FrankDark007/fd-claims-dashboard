@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   ChatBubbleBottomCenterTextIcon,
   EnvelopeIcon,
+  PaperAirplaneIcon,
   PencilSquareIcon,
   PhoneIcon,
+  SparklesIcon,
   TrashIcon,
 } from '@heroicons/react/24/outline'
 import type {
@@ -14,14 +16,17 @@ import type {
   ProjectCommunication,
   ProjectCommunicationWriteInput,
 } from '../../shared/projects'
+import { useAiDraftEmail, useAiSendEmail } from '../../hooks/useAI'
 
 interface EmailTabProps {
   project: Project
   communications: ProjectCommunication[]
   loading: boolean
+  token: string
   onCreate: (input: ProjectCommunicationWriteInput) => Promise<unknown>
   onUpdate: (communicationId: string, input: ProjectCommunicationWriteInput) => Promise<unknown>
   onDelete: (communicationId: string) => Promise<void>
+  onRefreshCommunications?: () => void
 }
 
 type Draft = {
@@ -40,12 +45,25 @@ const STATUS_OPTIONS: CommunicationStatus[] = ['planned', 'sent', 'received', 'r
 const CHANNEL_OPTIONS: CommunicationChannel[] = ['email', 'phone', 'text', 'meeting']
 const DIRECTION_OPTIONS: CommunicationDirection[] = ['outbound', 'inbound']
 
-export default function EmailTab({ project, communications, loading, onCreate, onUpdate, onDelete }: EmailTabProps) {
+type AiTemplateType = 'reminder' | 'document_request' | 'escalation' | 'payment_confirmation'
+
+const AI_TEMPLATE_OPTIONS: { value: AiTemplateType; label: string }[] = [
+  { value: 'reminder', label: 'Invoice Reminder' },
+  { value: 'document_request', label: 'Document Request' },
+  { value: 'escalation', label: 'Escalation' },
+  { value: 'payment_confirmation', label: 'Payment Thank You' },
+]
+
+export default function EmailTab({ project, communications, loading, token, onCreate, onUpdate, onDelete, onRefreshCommunications }: EmailTabProps) {
   const [draft, setDraft] = useState<Draft>(buildDefaultDraft(project))
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [workingId, setWorkingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [aiTemplateType, setAiTemplateType] = useState<AiTemplateType>('reminder')
+  const [sendSuccess, setSendSuccess] = useState<string | null>(null)
+  const { loading: aiDrafting, error: aiError, generateDraft } = useAiDraftEmail(token)
+  const { loading: aiSending, error: sendError, sendEmail } = useAiSendEmail(token)
 
   useEffect(() => {
     if (!editingId) {
@@ -144,7 +162,7 @@ export default function EmailTab({ project, communications, loading, onCreate, o
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 flex flex-wrap items-center gap-2">
           {quickTemplates.map((template) => (
             <button
               key={template.label}
@@ -161,7 +179,47 @@ export default function EmailTab({ project, communications, loading, onCreate, o
               {template.label}
             </button>
           ))}
+
+          <span className="mx-1 text-slate-300">|</span>
+
+          <select
+            value={aiTemplateType}
+            onChange={(e) => setAiTemplateType(e.target.value as AiTemplateType)}
+            className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-sm font-semibold text-violet-700 focus:border-violet-400 focus:outline-none"
+          >
+            {AI_TEMPLATE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            disabled={aiDrafting}
+            onClick={async () => {
+              setEditingId(null)
+              setSendSuccess(null)
+              const result = await generateDraft(project.id, aiTemplateType)
+              if (result) {
+                setDraft({
+                  ...buildDefaultDraft(project),
+                  channel: 'email',
+                  direction: 'outbound',
+                  subject: result.subject,
+                  body: result.body,
+                  counterpartAddress: result.to,
+                  status: 'planned',
+                })
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-violet-300 bg-violet-100 px-3 py-1.5 text-sm font-semibold text-violet-700 hover:bg-violet-200 disabled:opacity-50"
+          >
+            <SparklesIcon className={`size-4 ${aiDrafting ? 'animate-spin' : ''}`} />
+            {aiDrafting ? 'Drafting...' : 'Draft with AI'}
+          </button>
         </div>
+
+        {aiError && (
+          <p className="mt-2 text-sm text-red-600">{aiError}</p>
+        )}
       </section>
 
       <section className="rounded-2xl bg-white p-6 shadow">
@@ -288,8 +346,34 @@ export default function EmailTab({ project, communications, loading, onCreate, o
         </div>
 
         {error && <p className="mt-4 text-sm text-red-700">{error}</p>}
+        {sendError && <p className="mt-4 text-sm text-red-700">{sendError}</p>}
+        {sendSuccess && <p className="mt-4 text-sm text-emerald-700">{sendSuccess}</p>}
 
-        <div className="mt-6 flex justify-end">
+        <div className="mt-6 flex justify-end gap-3">
+          {draft.channel === 'email' && draft.direction === 'outbound' && draft.counterpartAddress.includes('@') && (
+            <button
+              type="button"
+              disabled={aiSending || !draft.subject.trim() || !draft.body.trim()}
+              onClick={async () => {
+                setSendSuccess(null)
+                const result = await sendEmail({
+                  projectId: project.id,
+                  to: draft.counterpartAddress,
+                  subject: draft.subject,
+                  body: draft.body,
+                })
+                if (result?.success) {
+                  setSendSuccess(`Email sent to ${draft.counterpartAddress}`)
+                  setDraft(buildDefaultDraft(project))
+                  onRefreshCommunications?.()
+                }
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+            >
+              <PaperAirplaneIcon className="size-4" />
+              {aiSending ? 'Sending...' : 'Send Email'}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void saveCommunication()}

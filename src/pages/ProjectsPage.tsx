@@ -4,6 +4,7 @@ import { PlusIcon } from '@heroicons/react/20/solid'
 import type { Project } from '../types/claim'
 import StatusPill from '../components/StatusPill'
 import CreateProjectModal from '../components/CreateProjectModal'
+import { computePriorityScore, getPriorityLabel } from '../lib/priority'
 
 interface ProjectsPageProps {
   projects: Project[]
@@ -223,7 +224,10 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 bg-white">
-                {filtered.map((project) => (
+                {filtered.map((project) => {
+                  const priorityScore = computePriorityScore(project, null, today)
+                  const priorityInfo = getPriorityLabel(priorityScore)
+                  return (
                   <tr key={project.id} className="hover:bg-slate-50">
                     <td className="py-4 pl-6 pr-3">
                       <div className="flex items-start gap-4">
@@ -231,9 +235,16 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                           {getInitials(project.clientName)}
                         </div>
                         <div className="min-w-0">
-                          <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
-                            {project.clientName}
-                          </Link>
+                          <div className="flex items-center gap-2">
+                            <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
+                              {project.clientName}
+                            </Link>
+                            {priorityScore > 0 && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
+                                {priorityInfo.text}
+                              </span>
+                            )}
+                          </div>
                           <p className="mt-1 truncate text-sm text-slate-600">
                             {project.projectName || 'Untitled project'}
                           </p>
@@ -291,7 +302,8 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                       </Link>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

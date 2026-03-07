@@ -303,7 +303,7 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
         </div>
 
         <div className="p-6">
-          {activeTab === 'overview' && <OverviewTab project={project} />}
+          {activeTab === 'overview' && <OverviewTab project={project} token={token} />}
           {activeTab === 'financials' && (
             <FinancialsTab
               project={project}
@@ -355,9 +355,14 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
               project={project}
               communications={communications}
               loading={communicationsLoading}
+              token={token}
               onCreate={createCommunication}
               onUpdate={updateCommunication}
               onDelete={deleteCommunication}
+              onRefreshCommunications={() => {
+                void refetchProject()
+                void onProjectsRefresh()
+              }}
             />
           )}
         </div>

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"npm:dev:api\"",
     "dev:client": "vite",
-    "dev:api": "wrangler d1 migrations apply FD_CLAIMS_DB --local --persist-to .wrangler/state && wrangler pages dev ./public --proxy 5174 --port 3002 --d1 FD_CLAIMS_DB --kv FD_CLAIMS_USERS --kv FD_LIGHT_STATE --r2 FD_PROJECT_FILES --persist-to .wrangler/state --log-level warn",
+    "dev:api": "wrangler d1 migrations apply FD_CLAIMS_DB --local --persist-to .wrangler/state && wrangler pages dev ./public --proxy 5174 --port 3002 --d1 FD_CLAIMS_DB --kv FD_CLAIMS_USERS --kv FD_LIGHT_STATE --kv FD_AI_CACHE --r2 FD_PROJECT_FILES --persist-to .wrangler/state --log-level warn",
     "dev:server": "npm run dev:api",
     "check:qa:local": "npx tsx scripts/check-qa-local.ts",
     "seed:qa:local": "npx tsx scripts/seed-qa-local.ts",
@@ -17,6 +17,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@headlessui/react": "^2.2.9",
     "@heroicons/react": "^2.2.0",
     "@notionhq/client": "^5.11.1",
@@ -29,6 +30,7 @@
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
+    "resend": "^6.9.3",
     "tsx": "^4.21.0"
   },
   "devDependencies": {

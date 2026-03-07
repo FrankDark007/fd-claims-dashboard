@@ -13,6 +13,8 @@ import type { Project } from '../types/claim'
 import { computeStats, computeAging } from '../hooks/useProjects'
 import { useAllCommunications, useAllTasks } from '../hooks/useOperationalQueues'
 import StatusPill from '../components/StatusPill'
+import AiBriefing from '../components/AiBriefing'
+import { computePriorityScore, getPriorityLabel } from '../lib/priority'
 
 interface DashboardPageProps {
   projects: Project[]
@@ -34,12 +36,16 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
     .slice(0, 8)
 
   const followUpQueue = unpaidProjects
-    .map((project) => ({
-      project,
-      followUpDate: project.nextFollowUpDate ?? project.dueDate,
-    }))
+    .map((project) => {
+      const lastComm = communications.find((c) => c.projectId === project.id)
+      return {
+        project,
+        followUpDate: project.nextFollowUpDate ?? project.dueDate,
+        priority: computePriorityScore(project, lastComm?.updatedAt.slice(0, 10) ?? null, today),
+      }
+    })
     .filter((item) => item.followUpDate !== null)
-    .sort((a, b) => a.followUpDate!.localeCompare(b.followUpDate!))
+    .sort((a, b) => b.priority - a.priority || a.followUpDate!.localeCompare(b.followUpDate!))
 
   const followUpTodayCount = followUpQueue.filter((item) => item.followUpDate === today).length
   const followUpThisWeekCount = followUpQueue.filter((item) => {
@@ -128,6 +134,8 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
         </div>
       </section>
 
+      <AiBriefing token={token} />
+
       <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           title="Active projects"
@@ -187,12 +195,19 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
-                  {followUpQueue.slice(0, 8).map(({ project, followUpDate }) => (
+                  {followUpQueue.slice(0, 8).map(({ project, followUpDate, priority }) => {
+                    const priorityInfo = getPriorityLabel(priority)
+                    return (
                     <tr key={project.id} className="hover:bg-slate-50">
                       <td className="px-4 py-4">
-                        <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
-                          {project.clientName}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
+                            {project.clientName}
+                          </Link>
+                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
+                            {priority}
+                          </span>
+                        </div>
                         <p className="mt-1 text-xs text-slate-500">{project.claimNumber || project.xactimateNumber || 'No claim number'}</p>
                       </td>
                       <td className="px-4 py-4 text-slate-600">{project.projectName || project.projectType || 'Uncategorized project'}</td>
@@ -207,7 +222,8 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                         <p className="mt-1 text-xs text-slate-500">{followUpLabel(followUpDate!, today)}</p>
                       </td>
                     </tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -1,12 +1,115 @@
+import { useState } from 'react'
+import {
+  SparklesIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  ArrowPathIcon,
+  ExclamationTriangleIcon,
+} from '@heroicons/react/24/outline'
 import type { Project } from '../../types/claim'
 import StatusPill from '../StatusPill'
+import { useAiProjectSummary } from '../../hooks/useAI'
 
 interface OverviewTabProps {
   project: Project
+  token: string
 }
 
-export default function OverviewTab({ project }: OverviewTabProps) {
+function AiSummaryPanel({ project, token }: { project: Project; token: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const { summary, loading, error, fetchSummary } = useAiProjectSummary(token)
+
+  const handleToggle = () => {
+    const next = !expanded
+    setExpanded(next)
+    if (next && !summary && !loading) {
+      fetchSummary(project.id)
+    }
+  }
+
   return (
+    <div className="mb-6 rounded-2xl border border-violet-200 bg-violet-50/50">
+      <button
+        type="button"
+        onClick={handleToggle}
+        className="flex w-full items-center justify-between px-5 py-4"
+      >
+        <div className="flex items-center gap-2">
+          <SparklesIcon className="size-5 text-violet-600" />
+          <span className="text-sm font-semibold text-violet-900">AI Analysis</span>
+        </div>
+        {expanded ? (
+          <ChevronUpIcon className="size-4 text-violet-400" />
+        ) : (
+          <ChevronDownIcon className="size-4 text-violet-400" />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-violet-200 px-5 py-4">
+          {loading && (
+            <div className="flex items-center gap-2 py-4 text-sm text-violet-600">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
+              Analyzing project...
+            </div>
+          )}
+
+          {error && (
+            <p className="py-2 text-sm text-red-600">{error}</p>
+          )}
+
+          {summary && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Status</p>
+                <p className="mt-1 text-sm text-slate-800">{summary.status}</p>
+              </div>
+
+              {summary.risks.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Risk Flags</p>
+                  <ul className="mt-1 space-y-1">
+                    {summary.risks.map((risk, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-sm text-slate-800">
+                        <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0 text-amber-500" />
+                        {risk}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Suggested Next Action</p>
+                <p className="mt-1 text-sm font-medium text-slate-900">{summary.nextAction}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-violet-500">Communication Summary</p>
+                <p className="mt-1 text-sm text-slate-700">{summary.communicationSummary}</p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => fetchSummary(project.id)}
+                disabled={loading}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-800 disabled:opacity-50"
+              >
+                <ArrowPathIcon className={`size-3.5 ${loading ? 'animate-spin' : ''}`} />
+                Regenerate
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default function OverviewTab({ project, token }: OverviewTabProps) {
+  return (
+    <div>
+      <AiSummaryPanel project={project} token={token} />
     <div className="rounded-lg bg-white shadow">
       <div className="px-4 py-5 sm:px-6">
         <h3 className="text-base/7 font-semibold text-foreground">Project Information</h3>
@@ -56,6 +159,9 @@ export default function OverviewTab({ project }: OverviewTabProps) {
           <Row label="Matterport">
             <StatusPill value={project.matterportStatus} size="md" />
           </Row>
+          <Row label="Client Email" value={project.clientEmail || '—'} />
+          <Row label="Client Phone" value={project.clientPhone || '—'} />
+          <Row label="Client Address" value={project.clientAddress || '—'} />
           <Row label="Project Manager" value={project.projectManagerName || '—'} />
           <Row label="PM Email" value={project.pmEmail || '—'} />
           <Row label="PM Phone" value={project.pmPhone || '—'} />
@@ -97,6 +203,7 @@ export default function OverviewTab({ project }: OverviewTabProps) {
           )}
         </dl>
       </div>
+    </div>
     </div>
   )
 }

@@ -16,6 +16,10 @@ database_name = "fd-claims-dashboard"
 database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
 preview_database_id = "b1d58d87-7c59-4444-911b-90ce65be1d77"
 
+[[kv_namespaces]]
+binding = "FD_AI_CACHE"
+id = "08faeb8153cd4a04933378816766f39b"
+
 [[r2_buckets]]
 binding = "FD_PROJECT_FILES"
 bucket_name = "fd-project-files"
