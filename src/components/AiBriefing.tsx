@@ -5,11 +5,12 @@ import { useAiBriefing } from '../hooks/useAI'
 
 interface AiBriefingProps {
   token: string
+  defaultExpanded?: boolean
 }
 
-export default function AiBriefing({ token }: AiBriefingProps) {
+export default function AiBriefing({ token, defaultExpanded = false }: AiBriefingProps) {
   const { briefing, loading, error, fetchBriefing } = useAiBriefing(token)
-  const [expanded, setExpanded] = useState(false)
+  const [expanded, setExpanded] = useState(defaultExpanded)
 
   useEffect(() => {
     if (expanded && !briefing && !loading) {

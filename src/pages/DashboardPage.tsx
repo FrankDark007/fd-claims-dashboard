@@ -1,19 +1,21 @@
+import { useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowTrendingDownIcon,
-  ArrowTrendingUpIcon,
-  BanknotesIcon,
-  ChatBubbleLeftRightIcon,
   CheckBadgeIcon,
+  ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
-  DocumentMagnifyingGlassIcon,
-  ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import type { Project } from '../types/claim'
 import { computeStats, computeAging } from '../hooks/useProjects'
 import { useAllCommunications, useAllTasks } from '../hooks/useOperationalQueues'
 import StatusPill from '../components/StatusPill'
 import AiBriefing from '../components/AiBriefing'
+import TodayFocusBar from '../components/TodayFocusBar'
+import NeedsAttentionQueue from '../components/NeedsAttentionQueue'
+import CollapsibleSection from '../components/CollapsibleSection'
+import { useGmailAlerts } from '../hooks/useGmailAlerts'
+import { useNeedsAttention } from '../hooks/useNeedsAttention'
 import { computePriorityScore, getPriorityLabel } from '../lib/priority'
 
 interface DashboardPageProps {
@@ -23,8 +25,9 @@ interface DashboardPageProps {
 }
 
 export default function DashboardPage({ projects, loading, token }: DashboardPageProps) {
-  const { tasks, loading: tasksLoading } = useAllTasks(token)
+  const { tasks, loading: tasksLoading, refetch: refetchTasks } = useAllTasks(token)
   const { communications, loading: communicationsLoading } = useAllCommunications(token)
+  const { alerts: gmailAlerts, unreadCount, markAsRead: markGmailRead } = useGmailAlerts(token)
   const stats = computeStats(projects)
   const agingBuckets = computeAging(projects)
   const today = new Date().toISOString().slice(0, 10)
@@ -47,17 +50,38 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
     .filter((item) => item.followUpDate !== null)
     .sort((a, b) => b.priority - a.priority || a.followUpDate!.localeCompare(b.followUpDate!))
 
-  const followUpTodayCount = followUpQueue.filter((item) => item.followUpDate === today).length
-  const followUpThisWeekCount = followUpQueue.filter((item) => {
-    if (!item.followUpDate) {
-      return false
-    }
+  const followUpsDueCount = followUpQueue.filter((item) => item.followUpDate! <= today).length
+  const overdueTasksCount = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate <= today).length
 
-    const diff = Math.floor(
-      (new Date(`${item.followUpDate}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000,
+  // Needs Attention queue
+  const attentionItems = useNeedsAttention({
+    projects,
+    tasks,
+    communications,
+    gmailAlerts,
+  })
+
+  const handleCompleteTask = useCallback(async (taskId: string, projectId: string) => {
+    const projectTasks = tasks.filter((t) => t.projectId === projectId)
+    const updatedTasks = projectTasks.map((t) =>
+      t.id === taskId ? { ...t, completed: true } : t,
     )
-    return diff >= 0 && diff <= 7
-  }).length
+
+    await fetch(`/api/projects/${projectId}/tasks`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ tasks: updatedTasks }),
+    })
+
+    refetchTasks()
+  }, [tasks, token, refetchTasks])
+
+  const handleDismissAlert = useCallback((alertId: string) => {
+    markGmailRead([alertId])
+  }, [markGmailRead])
 
   const openTasks = tasks.filter((task) => !task.completed)
   const dueTasks = openTasks
@@ -65,24 +89,6 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
     .slice(0, 8)
 
   const recentCommunications = communications.slice(0, 6)
-  const recentContactCount = communications.filter((communication) => {
-    const diff = Math.floor(
-      (new Date(`${today}T12:00:00`).getTime() - new Date(communication.updatedAt).getTime()) / 86400000,
-    )
-    return diff <= 7
-  }).length
-
-  const staleCollectionsCount = unpaidProjects.filter((project) => {
-    const lastCommunication = communications.find((communication) => communication.projectId === project.id)
-    if (!lastCommunication) {
-      return true
-    }
-
-    const diff = Math.floor(
-      (new Date(`${today}T12:00:00`).getTime() - new Date(lastCommunication.updatedAt).getTime()) / 86400000,
-    )
-    return diff > 7
-  }).length
 
   if (loading || tasksLoading || communicationsLoading) {
     return (
@@ -93,181 +99,62 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
   }
 
   return (
-    <div className="space-y-8">
-      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-8 px-6 py-8 lg:grid-cols-[1.5fr_0.8fr] lg:px-8">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-primary">Operations snapshot</p>
-            <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-              Claims, collections, task load, and communication cadence in one board.
-            </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-              Keep unpaid invoices moving, surface stale follow-up, and make it obvious which jobs need new outreach or internal action today.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Link
-                to="/projects"
-                className="inline-flex items-center rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-hover"
-              >
-                Open projects
-              </Link>
-              <Link
-                to="/reports"
-                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-              >
-                View reports
-              </Link>
-            </div>
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            <SummaryPanel
-              label="Collections due now"
-              value={followUpQueue.filter((item) => item.followUpDate! <= today).length.toString()}
-              detail={`${followUpTodayCount} today · ${followUpThisWeekCount} this week`}
-            />
-            <SummaryPanel
-              label="Stale collections contact"
-              value={staleCollectionsCount.toString()}
-              detail={`${recentContactCount} communications logged in the last 7 days`}
-            />
-          </div>
-        </div>
-      </section>
+    <div className="space-y-6">
+      {/* Tier 1: Today's Focus KPI Bar */}
+      <TodayFocusBar
+        userName="Frank"
+        followUpsDueCount={followUpsDueCount}
+        overdueTasksCount={overdueTasksCount}
+        unreadAlertCount={unreadCount}
+        outstandingBalance={outstandingBalance}
+      />
 
-      <AiBriefing token={token} />
-
-      <dl className="grid grid-cols-1 gap-px overflow-hidden rounded-3xl border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          title="Active projects"
-          value={stats.activeCount.toString()}
-          emphasis={`${stats.totalProjects} total`}
-          icon={BanknotesIcon}
-          tone="neutral"
+      {/* Tier 2: Needs Attention + AI Briefing */}
+      <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+        <NeedsAttentionQueue
+          items={attentionItems}
+          token={token}
+          onCompleteTask={handleCompleteTask}
+          onDismissAlert={handleDismissAlert}
         />
-        <MetricCard
-          title="Outstanding balance"
-          value={`$${outstandingBalance.toLocaleString()}`}
-          emphasis={`${unpaidProjects.length} unpaid jobs`}
-          icon={ArrowTrendingUpIcon}
-          tone="positive"
-        />
-        <MetricCard
-          title="Overdue invoices"
-          value={stats.overdueCount.toString()}
-          emphasis={`${followUpTodayCount} due today`}
-          icon={ExclamationTriangleIcon}
-          tone="alert"
-        />
-        <MetricCard
-          title="Missing docs"
-          value={(stats.missingContracts + stats.missingCOCs).toString()}
-          emphasis={`${stats.missingContracts} contracts · ${stats.missingCOCs} COCs`}
-          icon={DocumentMagnifyingGlassIcon}
-          tone="warning"
-        />
-      </dl>
 
-      <div className="grid gap-8 xl:grid-cols-[1.25fr_0.75fr]">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Collections queue</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950">Who needs a reminder next</h3>
-              <p className="mt-2 text-sm text-slate-600">Sorted by next follow-up date, falling back to due date.</p>
-            </div>
-            <Link to="/calendar" className="text-sm font-semibold text-primary hover:text-primary-hover">
-              Open calendar
-            </Link>
-          </div>
+        <div className="space-y-6">
+          <AiBriefing token={token} defaultExpanded />
 
-          {followUpQueue.length === 0 ? (
-            <div className="py-12 text-sm text-slate-500">No unpaid projects with follow-up dates are scheduled yet.</div>
-          ) : (
-            <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200">
-              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold text-slate-900">Client</th>
-                    <th className="px-4 py-3 font-semibold text-slate-900">Project</th>
-                    <th className="px-4 py-3 font-semibold text-slate-900">Status</th>
-                    <th className="px-4 py-3 text-right font-semibold text-slate-900">Amount</th>
-                    <th className="px-4 py-3 font-semibold text-slate-900">Next action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 bg-white">
-                  {followUpQueue.slice(0, 8).map(({ project, followUpDate, priority }) => {
-                    const priorityInfo = getPriorityLabel(priority)
-                    return (
-                    <tr key={project.id} className="hover:bg-slate-50">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
-                            {project.clientName}
-                          </Link>
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
-                            {priority}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-slate-500">{project.claimNumber || project.xactimateNumber || 'No claim number'}</p>
-                      </td>
-                      <td className="px-4 py-4 text-slate-600">{project.projectName || project.projectType || 'Uncategorized project'}</td>
-                      <td className="px-4 py-4">
-                        <StatusPill value={project.invoiceStatus} />
-                      </td>
-                      <td className="px-4 py-4 text-right font-medium tabular-nums text-slate-900">
-                        {project.amount ? `$${project.amount.toLocaleString()}` : '—'}
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className={`font-semibold ${followUpTone(followUpDate!, today)}`}>{formatDate(followUpDate!)}</p>
-                        <p className="mt-1 text-xs text-slate-500">{followUpLabel(followUpDate!, today)}</p>
-                      </td>
-                    </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-
-        <div className="space-y-8">
+          {/* Compact Invoice Aging */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Invoice aging</p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">Outstanding balance by age</h3>
+                <h3 className="mt-1 text-base font-semibold text-slate-950">Outstanding by age</h3>
               </div>
               <ArrowTrendingDownIcon className="size-5 text-slate-400" />
             </div>
-            <div className="mt-6 space-y-4">
+            <div className="mt-4 grid grid-cols-2 gap-2">
               {agingBuckets.map((bucket) => (
-                <div key={bucket.label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{bucket.label}</p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-500">{bucket.range}</p>
-                    </div>
-                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                      {bucket.count}
-                    </span>
-                  </div>
-                  <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">
+                <div key={bucket.label} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-500">{bucket.label}</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-slate-950">
                     ${bucket.totalAmount.toLocaleString()}
+                  </p>
+                  <p className="text-[10px] uppercase tracking-wide text-slate-400">
+                    {bucket.count} project{bucket.count === 1 ? '' : 's'} · {bucket.range}
                   </p>
                 </div>
               ))}
             </div>
           </section>
 
+          {/* Compact Document Readiness */}
           <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Readiness</p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">Document coverage</h3>
+                <h3 className="mt-1 text-base font-semibold text-slate-950">Document coverage</h3>
               </div>
               <CheckBadgeIcon className="size-5 text-emerald-500" />
             </div>
-            <div className="mt-6 space-y-3">
+            <div className="mt-4 space-y-2">
               <ReadinessRow label="Contract signed" value={projects.filter((project) => project.contractStatus === 'Signed').length} total={projects.length} />
               <ReadinessRow label="COC signed" value={projects.filter((project) => project.cocStatus === 'Signed').length} total={projects.length} />
               <ReadinessRow label="Dry logs received" value={projects.filter((project) => project.drylogStatus === 'Received').length} total={projects.length} />
@@ -278,20 +165,79 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
         </div>
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-2">
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Task queue</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950">Internal work due now</h3>
-            </div>
-            <ClipboardDocumentListIcon className="size-5 text-slate-400" />
-          </div>
+      {/* Tier 3: Collapsible Reference Sections */}
+      <CollapsibleSection
+        title="Collections queue"
+        summary={`${followUpQueue.length} projects · $${outstandingBalance.toLocaleString()} outstanding`}
+        icon={<ClipboardDocumentListIcon className="size-5 text-slate-400" />}
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <p className="text-sm text-slate-600">Sorted by priority score, then next follow-up date.</p>
+          <Link to="/calendar" className="text-sm font-semibold text-primary hover:text-primary-hover">
+            Open calendar
+          </Link>
+        </div>
 
+        {followUpQueue.length === 0 ? (
+          <div className="py-8 text-sm text-slate-500">No unpaid projects with follow-up dates are scheduled yet.</div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-slate-200">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+              <thead className="bg-slate-50">
+                <tr>
+                  <th className="px-4 py-3 font-semibold text-slate-900">Client</th>
+                  <th className="px-4 py-3 font-semibold text-slate-900">Project</th>
+                  <th className="px-4 py-3 font-semibold text-slate-900">Status</th>
+                  <th className="px-4 py-3 text-right font-semibold text-slate-900">Amount</th>
+                  <th className="px-4 py-3 font-semibold text-slate-900">Next action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200 bg-white">
+                {followUpQueue.slice(0, 8).map(({ project, followUpDate, priority }) => {
+                  const priorityInfo = getPriorityLabel(priority)
+                  return (
+                  <tr key={project.id} className="hover:bg-slate-50">
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
+                          {project.clientName}
+                        </Link>
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
+                          {priority}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-slate-500">{project.claimNumber || project.xactimateNumber || 'No claim number'}</p>
+                    </td>
+                    <td className="px-4 py-4 text-slate-600">{project.projectName || project.projectType || 'Uncategorized project'}</td>
+                    <td className="px-4 py-4">
+                      <StatusPill value={project.invoiceStatus} />
+                    </td>
+                    <td className="px-4 py-4 text-right font-medium tabular-nums text-slate-900">
+                      {project.amount ? `$${project.amount.toLocaleString()}` : '\u2014'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <p className={`font-semibold ${followUpTone(followUpDate!, today)}`}>{formatDate(followUpDate!)}</p>
+                      <p className="mt-1 text-xs text-slate-500">{followUpLabel(followUpDate!, today)}</p>
+                    </td>
+                  </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CollapsibleSection>
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <CollapsibleSection
+          title="Task queue"
+          summary={`${dueTasks.length} overdue or due today`}
+          icon={<ClipboardDocumentListIcon className="size-5 text-slate-400" />}
+        >
           {dueTasks.length === 0 ? (
-            <div className="py-12 text-sm text-slate-500">No overdue or due-today tasks are open.</div>
+            <div className="py-8 text-sm text-slate-500">No overdue or due-today tasks are open.</div>
           ) : (
-            <ul className="mt-6 space-y-3">
+            <ul className="space-y-3">
               {dueTasks.map((task) => {
                 const project = projects.find((candidate) => candidate.id === task.projectId)
                 return (
@@ -305,7 +251,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                           </Link>
                         )}
                         <p className="mt-1 text-xs text-slate-500">
-                          {task.assignee || 'Unassigned'}{task.dueDate ? ` · Due ${formatDate(task.dueDate)}` : ''}
+                          {task.assignee || 'Unassigned'}{task.dueDate ? ` \u00b7 Due ${formatDate(task.dueDate)}` : ''}
                         </p>
                       </div>
                       {task.dueDate && <span className="text-xs font-semibold text-rose-700">{followUpLabel(task.dueDate, today)}</span>}
@@ -315,21 +261,17 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
               })}
             </ul>
           )}
-        </section>
+        </CollapsibleSection>
 
-        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Recent communications</p>
-              <h3 className="mt-2 text-xl font-semibold text-slate-950">Latest outreach and replies</h3>
-            </div>
-            <ChatBubbleLeftRightIcon className="size-5 text-slate-400" />
-          </div>
-
+        <CollapsibleSection
+          title="Recent communications"
+          summary={`${recentCommunications.length} logged`}
+          icon={<ChatBubbleLeftRightIcon className="size-5 text-slate-400" />}
+        >
           {recentCommunications.length === 0 ? (
-            <div className="py-12 text-sm text-slate-500">No communications have been logged yet.</div>
+            <div className="py-8 text-sm text-slate-500">No communications have been logged yet.</div>
           ) : (
-            <ul className="mt-6 space-y-3">
+            <ul className="space-y-3">
               {recentCommunications.map((communication) => {
                 const project = projects.find((candidate) => candidate.id === communication.projectId)
                 return (
@@ -343,7 +285,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                           </Link>
                         )}
                         <p className="mt-1 text-xs text-slate-500">
-                          {labelize(communication.direction)} {labelize(communication.channel)} · {communication.counterpartName || 'Unknown contact'}
+                          {labelize(communication.direction)} {labelize(communication.channel)} \u00b7 {communication.counterpartName || 'Unknown contact'}
                         </p>
                       </div>
                       <span className="text-xs text-slate-500">{formatDate(communication.updatedAt.slice(0, 10))}</span>
@@ -353,24 +295,24 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
               })}
             </ul>
           )}
-        </section>
+        </CollapsibleSection>
       </div>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Recent projects</p>
-            <h3 className="mt-2 text-xl font-semibold text-slate-950">Latest work added to the board</h3>
-          </div>
+      <CollapsibleSection
+        title="Recent projects"
+        summary={`${recentProjects.length} latest of ${stats.totalProjects} total`}
+      >
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <p className="text-sm text-slate-600">Latest work added to the board.</p>
           <Link to="/projects" className="text-sm font-semibold text-primary hover:text-primary-hover">
             View all
           </Link>
         </div>
 
         {recentProjects.length === 0 ? (
-          <div className="py-12 text-sm text-slate-500">No projects yet.</div>
+          <div className="py-8 text-sm text-slate-500">No projects yet.</div>
         ) : (
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             {recentProjects.map((project) => (
               <Link
                 key={project.id}
@@ -386,7 +328,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                       <p className="truncate text-sm font-semibold text-slate-950">{project.clientName}</p>
                       <p className="mt-1 truncate text-sm text-slate-600">{project.projectName || project.projectType || 'Project detail'}</p>
                       <p className="mt-2 text-xs text-slate-500">
-                        {project.claimNumber || 'No claim number'} · Created {formatTimestamp(project.createdAt)}
+                        {project.claimNumber || 'No claim number'} \u00b7 Created {formatTimestamp(project.createdAt)}
                       </p>
                     </div>
                   </div>
@@ -402,49 +344,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
             ))}
           </div>
         )}
-      </section>
-    </div>
-  )
-}
-
-function MetricCard({
-  title,
-  value,
-  emphasis,
-  icon: Icon,
-  tone,
-}: {
-  title: string
-  value: string
-  emphasis: string
-  icon: typeof BanknotesIcon
-  tone: 'neutral' | 'positive' | 'alert' | 'warning'
-}) {
-  const toneClasses = {
-    neutral: 'text-slate-600',
-    positive: 'text-emerald-600',
-    alert: 'text-rose-600',
-    warning: 'text-amber-600',
-  }
-
-  return (
-    <div className="bg-white px-4 py-10 sm:px-6 xl:px-8">
-      <div className="flex items-center justify-between gap-4">
-        <dt className="text-sm font-medium text-slate-500">{title}</dt>
-        <Icon className={`size-5 ${toneClasses[tone]}`} />
-      </div>
-      <dd className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">{value}</dd>
-      <dd className={`mt-2 text-xs font-semibold uppercase tracking-[0.18em] ${toneClasses[tone]}`}>{emphasis}</dd>
-    </div>
-  )
-}
-
-function SummaryPanel({ label, value, detail }: { label: string; value: string; detail: string }) {
-  return (
-    <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-      <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
-      <p className="mt-2 text-sm text-slate-600">{detail}</p>
+      </CollapsibleSection>
     </div>
   )
 }
@@ -453,13 +353,13 @@ function ReadinessRow({ label, value, total }: { label: string; value: number; t
   const percent = total === 0 ? 0 : Math.round((value / total) * 100)
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
       <div className="flex items-center justify-between gap-4">
         <span className="text-sm font-medium text-slate-900">{label}</span>
-        <span className="text-sm font-semibold text-slate-600">{value}/{total}</span>
+        <span className="text-xs font-semibold text-slate-600">{value}/{total}</span>
       </div>
-      <div className="mt-3 h-2 rounded-full bg-slate-200">
-        <div className="h-2 rounded-full bg-primary" style={{ width: `${percent}%` }} />
+      <div className="mt-2 h-1.5 rounded-full bg-slate-200">
+        <div className="h-1.5 rounded-full bg-primary" style={{ width: `${percent}%` }} />
       </div>
     </div>
   )
