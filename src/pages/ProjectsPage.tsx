@@ -210,103 +210,160 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
               : 'No projects found.'}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
-              <thead className="bg-slate-50">
-                <tr>
-                  <th className="py-3.5 pl-6 pr-3 font-semibold text-slate-900">Client</th>
-                  <th className="px-3 py-3.5 font-semibold text-slate-900">Type</th>
-                  <th className="px-3 py-3.5 font-semibold text-slate-900">Financials</th>
-                  <th className="px-3 py-3.5 font-semibold text-slate-900">Documents</th>
-                  <th className="px-3 py-3.5 font-semibold text-slate-900">Collections</th>
-                  <th className="px-3 py-3.5 font-semibold text-slate-900">Project state</th>
-                  <th className="py-3.5 pl-3 pr-6 text-right font-semibold text-slate-900">Open</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-200 bg-white">
-                {filtered.map((project) => {
-                  const priorityScore = computePriorityScore(project, null, today)
-                  const priorityInfo = getPriorityLabel(priorityScore)
-                  return (
-                  <tr key={project.id} className="hover:bg-slate-50">
-                    <td className="py-4 pl-6 pr-3">
-                      <div className="flex items-start gap-4">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary">
-                          {getInitials(project.clientName)}
+          <>
+            {/* Mobile card list */}
+            <div className="divide-y divide-slate-200 lg:hidden">
+              {filtered.map((project) => {
+                const priorityScore = computePriorityScore(project, null, today)
+                const priorityInfo = getPriorityLabel(priorityScore)
+                const followUp = project.nextFollowUpDate ?? project.dueDate
+                return (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    className="block px-5 py-4 transition-colors active:bg-slate-50"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary">
+                        {getInitials(project.clientName)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-900">{project.clientName}</p>
+                          {priorityScore > 0 && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
+                              {priorityInfo.text}
+                            </span>
+                          )}
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
-                              {project.clientName}
-                            </Link>
-                            {priorityScore > 0 && (
-                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
-                                {priorityInfo.text}
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-1 truncate text-sm text-slate-600">
-                            {project.projectName || 'Untitled project'}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {project.claimNumber || 'No claim #'} · {project.carrier || 'Carrier not set'}
-                          </p>
+                        <p className="mt-1 truncate text-sm text-slate-600">
+                          {project.projectName || project.projectType || 'Untitled project'}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {project.claimNumber || 'No claim #'} · {project.carrier || 'Carrier not set'}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <StatusPill value={project.invoiceStatus} />
+                          {project.amount && (
+                            <span className="text-sm font-medium tabular-nums text-slate-700">
+                              ${project.amount.toLocaleString()}
+                            </span>
+                          )}
+                          {followUp && project.invoiceStatus !== 'Paid' && (
+                            <span className={`text-xs font-semibold ${dateTone(followUp, project.invoiceStatus, today)}`}>
+                              Follow-up {formatDate(followUp)}
+                            </span>
+                          )}
                         </div>
                       </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="space-y-2">
-                        {project.projectType ? (
-                          <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${typeClasses(project.projectType)}`}>
-                            {project.projectType}
-                          </span>
-                        ) : (
-                          <span className="text-sm text-slate-400">Unassigned</span>
-                        )}
-                        <p className="text-xs text-slate-500">XA {project.xactimateNumber || '—'}</p>
-                      </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="space-y-2">
-                        <p className="font-medium tabular-nums text-slate-900">
-                          {project.amount ? `$${project.amount.toLocaleString()}` : '—'}
-                        </p>
-                        <StatusPill value={project.invoiceStatus} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="space-y-2">
-                        <StatusPill value={project.contractStatus} />
-                        <StatusPill value={project.cocStatus} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <div className="space-y-1">
-                        <p className={`font-semibold ${dateTone(project.nextFollowUpDate ?? project.dueDate, project.invoiceStatus, today)}`}>
-                          {formatDate(project.nextFollowUpDate ?? project.dueDate)}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Due {formatDate(project.dueDate)}
-                        </p>
-                      </div>
-                    </td>
-                    <td className="px-3 py-4">
-                      <StatusPill value={project.projectStatus} />
-                    </td>
-                    <td className="py-4 pl-3 pr-6 text-right">
-                      <Link
-                        to={`/projects/${project.id}`}
-                        className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
-                      >
-                        View
-                      </Link>
-                    </td>
+                      <svg className="size-5 shrink-0 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                      </svg>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto lg:block">
+              <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="py-3.5 pl-6 pr-3 font-semibold text-slate-900">Client</th>
+                    <th className="px-3 py-3.5 font-semibold text-slate-900">Type</th>
+                    <th className="px-3 py-3.5 font-semibold text-slate-900">Financials</th>
+                    <th className="px-3 py-3.5 font-semibold text-slate-900">Documents</th>
+                    <th className="px-3 py-3.5 font-semibold text-slate-900">Collections</th>
+                    <th className="px-3 py-3.5 font-semibold text-slate-900">Project state</th>
+                    <th className="py-3.5 pl-3 pr-6 text-right font-semibold text-slate-900">Open</th>
                   </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {filtered.map((project) => {
+                    const priorityScore = computePriorityScore(project, null, today)
+                    const priorityInfo = getPriorityLabel(priorityScore)
+                    return (
+                    <tr key={project.id} className="hover:bg-slate-50">
+                      <td className="py-4 pl-6 pr-3">
+                        <div className="flex items-start gap-4">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary">
+                            {getInitials(project.clientName)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Link to={`/projects/${project.id}`} className="font-semibold text-slate-900 hover:text-primary">
+                                {project.clientName}
+                              </Link>
+                              {priorityScore > 0 && (
+                                <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${priorityInfo.tone}`}>
+                                  {priorityInfo.text}
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 truncate text-sm text-slate-600">
+                              {project.projectName || 'Untitled project'}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {project.claimNumber || 'No claim #'} · {project.carrier || 'Carrier not set'}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-4">
+                        <div className="space-y-2">
+                          {project.projectType ? (
+                            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${typeClasses(project.projectType)}`}>
+                              {project.projectType}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-slate-400">Unassigned</span>
+                          )}
+                          <p className="text-xs text-slate-500">XA {project.xactimateNumber || '—'}</p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-4">
+                        <div className="space-y-2">
+                          <p className="font-medium tabular-nums text-slate-900">
+                            {project.amount ? `$${project.amount.toLocaleString()}` : '—'}
+                          </p>
+                          <StatusPill value={project.invoiceStatus} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-4">
+                        <div className="space-y-2">
+                          <StatusPill value={project.contractStatus} />
+                          <StatusPill value={project.cocStatus} />
+                        </div>
+                      </td>
+                      <td className="px-3 py-4">
+                        <div className="space-y-1">
+                          <p className={`font-semibold ${dateTone(project.nextFollowUpDate ?? project.dueDate, project.invoiceStatus, today)}`}>
+                            {formatDate(project.nextFollowUpDate ?? project.dueDate)}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Due {formatDate(project.dueDate)}
+                          </p>
+                        </div>
+                      </td>
+                      <td className="px-3 py-4">
+                        <StatusPill value={project.projectStatus} />
+                      </td>
+                      <td className="py-4 pl-3 pr-6 text-right">
+                        <Link
+                          to={`/projects/${project.id}`}
+                          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50"
+                        >
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </section>
 
