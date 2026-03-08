@@ -6,6 +6,7 @@ export const DRYLOG_STATUSES = ['Missing', 'Requested', 'Received', 'N/A'] as co
 export const MATTERPORT_STATUSES = ['N/A', 'Missing', 'Has Scan'] as const
 export const REWRITE_STATUSES = ['Not Started', 'In Progress', 'Review', 'Done'] as const
 export const INVOICE_STATUSES = ['Draft', 'Sent', 'Paid', 'Overdue'] as const
+export const BUSINESS_CATEGORIES = ['Flood Doctor', 'Restoration Doctor', 'Galaxy Restoration'] as const
 export const FILE_CATEGORIES = ['contracts', 'cocs', 'drylogs', 'invoices', 'photos', 'correspondence', 'other'] as const
 export const INVOICE_EVENT_TYPES = ['sent', 'reminder', 'paid', 'disputed'] as const
 export const COMMUNICATION_CHANNELS = ['email', 'phone', 'text', 'meeting'] as const
@@ -20,6 +21,7 @@ export type DrylogStatus = typeof DRYLOG_STATUSES[number]
 export type MatterportStatus = typeof MATTERPORT_STATUSES[number]
 export type RewriteStatus = typeof REWRITE_STATUSES[number]
 export type InvoiceStatus = typeof INVOICE_STATUSES[number]
+export type BusinessCategory = typeof BUSINESS_CATEGORIES[number]
 export type FileCategory = typeof FILE_CATEGORIES[number]
 export type InvoiceEventType = typeof INVOICE_EVENT_TYPES[number]
 export type CommunicationChannel = typeof COMMUNICATION_CHANNELS[number]
@@ -58,6 +60,7 @@ export interface Project {
   driveFolderUrl: string
   xactimateNumber: string
   claimNumber: string
+  businessCategory: string
   carrier: string
   projectManagerName: string
   pmEmail: string
@@ -65,6 +68,9 @@ export interface Project {
   adjusterName: string
   adjusterEmail: string
   adjusterPhone: string
+  clientEmail: string
+  clientPhone: string
+  clientAddress: string
   invoiceSentDate: string | null
   dueDate: string | null
   nextFollowUpDate: string | null
@@ -188,6 +194,7 @@ export interface ProjectWriteInput {
   driveFolderUrl?: string
   xactimateNumber?: string
   claimNumber?: string
+  businessCategory?: string
   carrier?: string
   projectManagerName?: string
   pmEmail?: string
@@ -195,6 +202,9 @@ export interface ProjectWriteInput {
   adjusterName?: string
   adjusterEmail?: string
   adjusterPhone?: string
+  clientEmail?: string
+  clientPhone?: string
+  clientAddress?: string
   invoiceSentDate?: string | null
   dueDate?: string | null
   nextFollowUpDate?: string | null
@@ -303,6 +313,10 @@ export function normalizeRewriteStatus(value: unknown): RewriteStatus | null {
 
 export function normalizeInvoiceStatus(value: unknown): InvoiceStatus | null {
   return isValueInList(value, INVOICE_STATUSES) ? value : null
+}
+
+export function normalizeBusinessCategory(value: unknown): string {
+  return isValueInList(value, BUSINESS_CATEGORIES) ? value : ''
 }
 
 export function normalizeFileCategory(value: unknown): FileCategory {

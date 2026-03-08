@@ -19,6 +19,7 @@ import {
   normalizeProjectStatus,
   normalizeProjectType,
   normalizeRewriteStatus,
+  normalizeBusinessCategory,
 } from '../../../src/shared/projects'
 import type {
   CommunicationChannel,
@@ -55,6 +56,7 @@ interface ProjectRecord {
   driveFolderUrl: string
   xactimateNumber: string
   claimNumber: string
+  businessCategory: string
   carrier: string
   projectManagerName: string
   pmEmail: string
@@ -62,6 +64,9 @@ interface ProjectRecord {
   adjusterName: string
   adjusterEmail: string
   adjusterPhone: string
+  clientEmail: string
+  clientPhone: string
+  clientAddress: string
   invoiceSentDate: string | null
   dueDate: string | null
   nextFollowUpDate: string | null
@@ -157,6 +162,7 @@ const PROJECT_SELECT = `
     drive_folder_url AS driveFolderUrl,
     xactimate_number AS xactimateNumber,
     claim_number AS claimNumber,
+    business_category AS businessCategory,
     carrier,
     project_manager_name AS projectManagerName,
     pm_email AS pmEmail,
@@ -164,6 +170,9 @@ const PROJECT_SELECT = `
     adjuster_name AS adjusterName,
     adjuster_email AS adjusterEmail,
     adjuster_phone AS adjusterPhone,
+    client_email AS clientEmail,
+    client_phone AS clientPhone,
+    client_address AS clientAddress,
     invoice_sent_date AS invoiceSentDate,
     due_date AS dueDate,
     next_follow_up_date AS nextFollowUpDate,
@@ -277,6 +286,9 @@ const PROJECT_SCHEMA_STATEMENTS = [
     adjuster_name TEXT NOT NULL DEFAULT '',
     adjuster_email TEXT NOT NULL DEFAULT '',
     adjuster_phone TEXT NOT NULL DEFAULT '',
+    client_email TEXT NOT NULL DEFAULT '',
+    client_phone TEXT NOT NULL DEFAULT '',
+    client_address TEXT NOT NULL DEFAULT '',
     invoice_sent_date TEXT,
     due_date TEXT,
     payment_received_date TEXT,
@@ -373,7 +385,7 @@ function shouldBootstrapProjectSchema(error: unknown): boolean {
     return false
   }
 
-  return error.message.includes('no such table:') || error.message.includes('no such column: next_follow_up_date')
+  return error.message.includes('no such table:') || error.message.includes('no such column:')
 }
 
 async function ensureProjectSchema(db: D1Database): Promise<void> {
@@ -384,13 +396,40 @@ async function ensureProjectSchema(db: D1Database): Promise<void> {
       }
 
       const projectColumns = await db.prepare('PRAGMA table_info(projects)').all<{ name: string }>()
-      const hasNextFollowUpDate = (projectColumns.results ?? []).some((column) => column.name === 'next_follow_up_date')
+      const colNames = new Set((projectColumns.results ?? []).map((c) => c.name))
 
-      if (!hasNextFollowUpDate) {
+      if (!colNames.has('next_follow_up_date')) {
         await db.prepare('ALTER TABLE projects ADD COLUMN next_follow_up_date TEXT').run()
+      }
+      if (!colNames.has('client_email')) {
+        await db.prepare("ALTER TABLE projects ADD COLUMN client_email TEXT NOT NULL DEFAULT ''").run()
+      }
+      if (!colNames.has('client_phone')) {
+        await db.prepare("ALTER TABLE projects ADD COLUMN client_phone TEXT NOT NULL DEFAULT ''").run()
+      }
+      if (!colNames.has('client_address')) {
+        await db.prepare("ALTER TABLE projects ADD COLUMN client_address TEXT NOT NULL DEFAULT ''").run()
       }
 
       await db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_next_follow_up_date ON projects(next_follow_up_date)').run()
+
+      // Share link views table
+      await db.prepare(`
+        CREATE TABLE IF NOT EXISTS share_link_views (
+          id TEXT PRIMARY KEY,
+          share_token TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          file_id TEXT NOT NULL,
+          ip_address TEXT NOT NULL DEFAULT '',
+          user_agent TEXT NOT NULL DEFAULT '',
+          referrer TEXT NOT NULL DEFAULT '',
+          viewed_at TEXT NOT NULL,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )
+      `).run()
+      await db.prepare('CREATE INDEX IF NOT EXISTS idx_share_link_views_token ON share_link_views(share_token)').run()
+      await db.prepare('CREATE INDEX IF NOT EXISTS idx_share_link_views_project_id ON share_link_views(project_id)').run()
+      await db.prepare('CREATE INDEX IF NOT EXISTS idx_share_link_views_viewed_at ON share_link_views(viewed_at DESC)').run()
     })().catch((error) => {
       schemaBootstrapPromise = null
       throw error
@@ -437,6 +476,7 @@ function mapProjectRecord(record: ProjectRecord): Project {
     driveFolderUrl: record.driveFolderUrl ?? '',
     xactimateNumber: record.xactimateNumber ?? '',
     claimNumber: record.claimNumber ?? '',
+    businessCategory: record.businessCategory ?? '',
     carrier: record.carrier ?? '',
     projectManagerName: record.projectManagerName ?? '',
     pmEmail: record.pmEmail ?? '',
@@ -444,6 +484,9 @@ function mapProjectRecord(record: ProjectRecord): Project {
     adjusterName: record.adjusterName ?? '',
     adjusterEmail: record.adjusterEmail ?? '',
     adjusterPhone: record.adjusterPhone ?? '',
+    clientEmail: record.clientEmail ?? '',
+    clientPhone: record.clientPhone ?? '',
+    clientAddress: record.clientAddress ?? '',
     invoiceSentDate: record.invoiceSentDate,
     dueDate: record.dueDate,
     nextFollowUpDate: record.nextFollowUpDate,
@@ -613,6 +656,7 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     driveFolderUrl: input.driveFolderUrl !== undefined ? normalizeOptionalText(input.driveFolderUrl) : existing?.driveFolderUrl ?? '',
     xactimateNumber: input.xactimateNumber !== undefined ? normalizeOptionalText(input.xactimateNumber) : existing?.xactimateNumber ?? '',
     claimNumber: input.claimNumber !== undefined ? normalizeOptionalText(input.claimNumber) : existing?.claimNumber ?? '',
+    businessCategory: input.businessCategory !== undefined ? normalizeOptionalText(input.businessCategory) : existing?.businessCategory ?? '',
     carrier: input.carrier !== undefined ? normalizeOptionalText(input.carrier) : existing?.carrier ?? '',
     projectManagerName: input.projectManagerName !== undefined ? normalizeOptionalText(input.projectManagerName) : existing?.projectManagerName ?? '',
     pmEmail: input.pmEmail !== undefined ? normalizeOptionalText(input.pmEmail) : existing?.pmEmail ?? '',
@@ -620,6 +664,9 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     adjusterName: input.adjusterName !== undefined ? normalizeOptionalText(input.adjusterName) : existing?.adjusterName ?? '',
     adjusterEmail: input.adjusterEmail !== undefined ? normalizeOptionalText(input.adjusterEmail) : existing?.adjusterEmail ?? '',
     adjusterPhone: input.adjusterPhone !== undefined ? normalizeOptionalText(input.adjusterPhone) : existing?.adjusterPhone ?? '',
+    clientEmail: input.clientEmail !== undefined ? normalizeOptionalText(input.clientEmail) : existing?.clientEmail ?? '',
+    clientPhone: input.clientPhone !== undefined ? normalizeOptionalText(input.clientPhone) : existing?.clientPhone ?? '',
+    clientAddress: input.clientAddress !== undefined ? normalizeOptionalText(input.clientAddress) : existing?.clientAddress ?? '',
     invoiceSentDate,
     dueDate,
     nextFollowUpDate,
@@ -645,10 +692,11 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
         id, invoice_id, client_name, project_name, project_type, project_status, invoice_status,
         amount, contract_status, coc_status, final_invoice_status, drylog_status, rewrite_status,
         matterport_status, company_cam_url, drive_folder_url, xactimate_number, claim_number,
-        carrier, project_manager_name, pm_email, pm_phone, adjuster_name, adjuster_email,
-        adjuster_phone, invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
+        business_category, carrier, project_manager_name, pm_email, pm_phone, adjuster_name, adjuster_email,
+        adjuster_phone, client_email, client_phone, client_address,
+        invoice_sent_date, due_date, next_follow_up_date, payment_received_date,
         notes, done, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         invoice_id = excluded.invoice_id,
         client_name = excluded.client_name,
@@ -667,6 +715,7 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
         drive_folder_url = excluded.drive_folder_url,
         xactimate_number = excluded.xactimate_number,
         claim_number = excluded.claim_number,
+        business_category = excluded.business_category,
         carrier = excluded.carrier,
         project_manager_name = excluded.project_manager_name,
         pm_email = excluded.pm_email,
@@ -674,6 +723,9 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
         adjuster_name = excluded.adjuster_name,
         adjuster_email = excluded.adjuster_email,
         adjuster_phone = excluded.adjuster_phone,
+        client_email = excluded.client_email,
+        client_phone = excluded.client_phone,
+        client_address = excluded.client_address,
         invoice_sent_date = excluded.invoice_sent_date,
         due_date = excluded.due_date,
         next_follow_up_date = excluded.next_follow_up_date,
@@ -700,6 +752,7 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
       project.driveFolderUrl,
       project.xactimateNumber,
       project.claimNumber,
+      project.businessCategory,
       project.carrier,
       project.projectManagerName,
       project.pmEmail,
@@ -707,6 +760,9 @@ async function insertOrReplaceProject(db: D1Database, project: ProjectRecord): P
       project.adjusterName,
       project.adjusterEmail,
       project.adjusterPhone,
+      project.clientEmail,
+      project.clientPhone,
+      project.clientAddress,
       project.invoiceSentDate,
       project.dueDate,
       project.nextFollowUpDate,
@@ -1418,4 +1474,235 @@ export async function deleteInvoiceEvent(db: D1Database, projectId: string, even
 
     return deleted
   })
+}
+
+// ── Share link view logging ──────────────────────────────────────────
+
+interface ShareLinkViewRecord {
+  id: string
+  shareToken: string
+  projectId: string
+  fileId: string
+  ipAddress: string
+  userAgent: string
+  referrer: string
+  viewedAt: string
+}
+
+export interface ShareLinkView {
+  id: string
+  shareToken: string
+  projectId: string
+  fileId: string
+  ipAddress: string
+  userAgent: string
+  referrer: string
+  viewedAt: string
+}
+
+export async function logShareLinkView(
+  db: D1Database,
+  params: {
+    shareToken: string
+    projectId: string
+    fileId: string
+    ipAddress: string
+    userAgent: string
+    referrer: string
+  }
+): Promise<void> {
+  await withProjectSchema(db, async () => {
+    const id = crypto.randomUUID()
+    const viewedAt = new Date().toISOString()
+    await db.prepare(`
+      INSERT INTO share_link_views (id, share_token, project_id, file_id, ip_address, user_agent, referrer, viewed_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(id, params.shareToken, params.projectId, params.fileId, params.ipAddress, params.userAgent, params.referrer, viewedAt).run()
+  })
+}
+
+export async function listShareLinkViews(db: D1Database, projectId: string): Promise<ShareLinkView[]> {
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare(`
+      SELECT
+        id,
+        share_token AS shareToken,
+        project_id AS projectId,
+        file_id AS fileId,
+        ip_address AS ipAddress,
+        user_agent AS userAgent,
+        referrer,
+        viewed_at AS viewedAt
+      FROM share_link_views
+      WHERE project_id = ?
+      ORDER BY viewed_at DESC
+      LIMIT 100
+    `).bind(projectId).all<ShareLinkViewRecord>()
+    return result.results ?? []
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Gmail Alerts
+// ---------------------------------------------------------------------------
+
+export interface GmailAlert {
+  id: string
+  projectId: string
+  communicationId: string
+  gmailMessageId: string
+  gmailThreadId: string | null
+  fromAddress: string
+  fromName: string
+  subject: string
+  summary: string
+  urgency: number
+  matchScore: number
+  matchRole: string
+  read: boolean
+  createdAt: string
+  clientName?: string
+  projectName?: string
+}
+
+interface GmailAlertRecord {
+  id: string
+  projectId: string
+  communicationId: string
+  gmailMessageId: string
+  gmailThreadId: string | null
+  fromAddress: string
+  fromName: string
+  subject: string
+  summary: string
+  urgency: number
+  matchScore: number
+  matchRole: string
+  read: number
+  createdAt: string
+  clientName?: string
+  projectName?: string
+}
+
+export async function createGmailAlert(
+  db: D1Database,
+  params: {
+    projectId: string
+    communicationId: string
+    gmailMessageId: string
+    gmailThreadId?: string | null
+    fromAddress: string
+    fromName: string
+    subject: string
+    summary: string
+    urgency: number
+    matchScore: number
+    matchRole: string
+  },
+): Promise<GmailAlert> {
+  const now = new Date().toISOString()
+  const id = crypto.randomUUID()
+
+  await db.prepare(`
+    INSERT INTO gmail_alerts (
+      id, project_id, communication_id, gmail_message_id, gmail_thread_id,
+      from_address, from_name, subject, summary, urgency,
+      match_score, match_role, read, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+  `).bind(
+    id,
+    params.projectId,
+    params.communicationId,
+    params.gmailMessageId,
+    params.gmailThreadId ?? null,
+    params.fromAddress,
+    params.fromName,
+    params.subject,
+    params.summary,
+    params.urgency,
+    params.matchScore,
+    params.matchRole,
+    now,
+  ).run()
+
+  return {
+    id,
+    projectId: params.projectId,
+    communicationId: params.communicationId,
+    gmailMessageId: params.gmailMessageId,
+    gmailThreadId: params.gmailThreadId ?? null,
+    fromAddress: params.fromAddress,
+    fromName: params.fromName,
+    subject: params.subject,
+    summary: params.summary,
+    urgency: params.urgency,
+    matchScore: params.matchScore,
+    matchRole: params.matchRole,
+    read: false,
+    createdAt: now,
+  }
+}
+
+export async function listGmailAlerts(
+  db: D1Database,
+  opts: { unreadOnly?: boolean; projectId?: string; limit?: number } = {},
+): Promise<GmailAlert[]> {
+  const conditions: string[] = []
+  const binds: (string | number)[] = []
+
+  if (opts.unreadOnly) {
+    conditions.push('ga.read = 0')
+  }
+
+  if (opts.projectId) {
+    conditions.push('ga.project_id = ?')
+    binds.push(opts.projectId)
+  }
+
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const limit = opts.limit ?? 50
+
+  const result = await db.prepare(`
+    SELECT
+      ga.id AS id,
+      ga.project_id AS projectId,
+      ga.communication_id AS communicationId,
+      ga.gmail_message_id AS gmailMessageId,
+      ga.gmail_thread_id AS gmailThreadId,
+      ga.from_address AS fromAddress,
+      ga.from_name AS fromName,
+      ga.subject AS subject,
+      ga.summary AS summary,
+      ga.urgency AS urgency,
+      ga.match_score AS matchScore,
+      ga.match_role AS matchRole,
+      ga.read AS read,
+      ga.created_at AS createdAt,
+      p.client_name AS clientName,
+      p.project_name AS projectName
+    FROM gmail_alerts ga
+    LEFT JOIN projects p ON p.id = ga.project_id
+    ${where}
+    ORDER BY ga.created_at DESC
+    LIMIT ?
+  `).bind(...binds, limit).all<GmailAlertRecord>()
+
+  return (result.results ?? []).map((r) => ({
+    ...r,
+    read: r.read === 1,
+  }))
+}
+
+export async function markGmailAlertsRead(
+  db: D1Database,
+  alertIds: string[],
+): Promise<number> {
+  if (alertIds.length === 0) return 0
+
+  const placeholders = alertIds.map(() => '?').join(', ')
+  const result = await db.prepare(
+    `UPDATE gmail_alerts SET read = 1 WHERE id IN (${placeholders})`,
+  ).bind(...alertIds).run()
+
+  return result.meta?.changes ?? 0
 }
