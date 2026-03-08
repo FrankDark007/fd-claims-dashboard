@@ -173,7 +173,7 @@ export default function ProjectDetailPage({ projects, token, onProjectsRefresh }
             </p>
 
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              <MetaBlock label="Claim info" lines={[project.claimNumber || 'No claim #', project.xactimateNumber ? `XA ${project.xactimateNumber}` : 'No Xactimate #']} />
+              <MetaBlock label="Xactimate" lines={[project.xactimateNumber ? `XA ${project.xactimateNumber}` : 'No Xactimate #']} />
               <MetaBlock label="Contacts" lines={[project.projectManagerName || 'No PM assigned', project.adjusterName || 'No adjuster set']} />
               <MetaBlock label="Carrier" lines={[project.carrier || 'Carrier not set', project.adjusterEmail || project.pmEmail || 'No contact email']} />
               <MetaBlock label="Collections" lines={[project.nextFollowUpDate ? `Follow-up ${formatDate(project.nextFollowUpDate)}` : 'No explicit follow-up date', project.paymentReceivedDate ? `Paid ${formatDate(project.paymentReceivedDate)}` : `Due ${formatDate(project.dueDate)}`]} />

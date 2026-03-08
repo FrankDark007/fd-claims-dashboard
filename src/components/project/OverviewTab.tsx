@@ -135,7 +135,6 @@ export default function OverviewTab({ project, token }: OverviewTabProps) {
             <StatusPill value={project.projectStatus} size="md" />
           </Row>
           <Row label="Xactimate #" value={project.xactimateNumber || '—'} />
-          <Row label="Claim #" value={project.claimNumber || '—'} />
           <Row label="Carrier" value={project.carrier || '—'} />
           <Row label="Amount" value={project.amount ? `$${project.amount.toLocaleString()}` : '—'} />
           <Row label="Invoice Status">

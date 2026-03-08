@@ -78,7 +78,7 @@ export function useNeedsAttention({
         ]
           .filter(Boolean)
           .join(' · '),
-        context: project.claimNumber || project.xactimateNumber || '',
+        context: project.xactimateNumber || '',
         projectId: project.id,
         clientName: project.clientName,
         data: { project, daysOverdue, amount: project.amount ?? 0 },

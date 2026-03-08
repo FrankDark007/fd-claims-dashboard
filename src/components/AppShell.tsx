@@ -12,6 +12,7 @@ import {
 } from '@headlessui/react'
 import {
   Bars3Icon,
+  BellIcon,
   CalendarIcon,
   ChartBarIcon,
   Cog6ToothIcon,
@@ -22,6 +23,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { ChevronDownIcon, MagnifyingGlassIcon } from '@heroicons/react/20/solid'
 import type { User } from '../types/claim'
+import { useGmailAlerts } from '../hooks/useGmailAlerts'
 
 function classNames(...classes: (string | boolean | undefined)[]) {
   return classes.filter(Boolean).join(' ')
@@ -40,6 +42,7 @@ const adminNavigation = [
 
 interface AppShellProps {
   user: User
+  token: string
   onLogout: () => void
   children: React.ReactNode
 }
@@ -117,9 +120,10 @@ function SidebarContent({ allNav, isCurrentPath, onNavigate }: SidebarContentPro
   )
 }
 
-export default function AppShell({ user, onLogout, children }: AppShellProps) {
+export default function AppShell({ user, token, onLogout, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const location = useLocation()
+  const { unreadCount } = useGmailAlerts(token, { unreadOnly: true })
 
   const allNav = user.role === 'admin' ? [...navigation, ...adminNavigation] : navigation
   const initials = user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -202,7 +206,7 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
                   />
                   <input
                     name="search"
-                    placeholder="Search clients, claim numbers, adjusters..."
+                    placeholder="Search clients, adjusters..."
                     aria-label="Search"
                     className="w-full rounded-full border border-gray-200 bg-gray-50 py-2 pl-9 pr-4 text-sm text-gray-900 outline-none transition focus:border-primary focus:bg-white focus:ring-2 focus:ring-primary/15"
                   />
@@ -215,6 +219,25 @@ export default function AppShell({ user, onLogout, children }: AppShellProps) {
                 <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gray-500">Today</p>
                 <p className="mt-1 text-sm font-semibold text-gray-900">{todayLabel}</p>
               </div>
+              <button
+                type="button"
+                className="relative rounded-full p-1.5 text-gray-400 hover:text-gray-600"
+                title={unreadCount > 0 ? `${unreadCount} unread email alerts` : 'No new email alerts'}
+                onClick={() => {
+                  // Navigate to dashboard where alerts panel lives
+                  if (location.pathname !== '/') {
+                    window.location.href = '/'
+                  }
+                }}
+              >
+                <BellIcon className="size-6" />
+                {unreadCount > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
               <div aria-hidden="true" className="hidden lg:block lg:h-6 lg:w-px lg:bg-gray-900/10" />
 
               {/* Profile dropdown */}

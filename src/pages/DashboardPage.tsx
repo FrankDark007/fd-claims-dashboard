@@ -206,7 +206,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                           {priority}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-500">{project.claimNumber || project.xactimateNumber || 'No claim number'}</p>
+                      <p className="mt-1 text-xs text-slate-500">{project.xactimateNumber ? `XA ${project.xactimateNumber}` : project.projectType || ''}</p>
                     </td>
                     <td className="px-4 py-4 text-slate-600">{project.projectName || project.projectType || 'Uncategorized project'}</td>
                     <td className="px-4 py-4">
@@ -328,7 +328,7 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
                       <p className="truncate text-sm font-semibold text-slate-950">{project.clientName}</p>
                       <p className="mt-1 truncate text-sm text-slate-600">{project.projectName || project.projectType || 'Project detail'}</p>
                       <p className="mt-2 text-xs text-slate-500">
-                        {project.claimNumber || 'No claim number'} \u00b7 Created {formatTimestamp(project.createdAt)}
+                        Created {formatTimestamp(project.createdAt)}
                       </p>
                     </div>
                   </div>

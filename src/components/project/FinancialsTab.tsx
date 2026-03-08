@@ -36,7 +36,6 @@ interface FinancialFormState {
   dueDate: string
   nextFollowUpDate: string
   paymentReceivedDate: string
-  claimNumber: string
   carrier: string
 }
 
@@ -91,7 +90,6 @@ export default function FinancialsTab({
         dueDate: parseDateField(financialForm.dueDate),
         nextFollowUpDate: parseDateField(financialForm.nextFollowUpDate),
         paymentReceivedDate: parseDateField(financialForm.paymentReceivedDate),
-        claimNumber: financialForm.claimNumber,
         carrier: financialForm.carrier,
       })
       setSuccessMessage('Financial details saved.')
@@ -274,11 +272,6 @@ export default function FinancialsTab({
               onChange={(value) => setFinancialForm((current) => ({ ...current, paymentReceivedDate: value }))}
             />
             <InputField
-              label="Claim Number"
-              value={financialForm.claimNumber}
-              onChange={(value) => setFinancialForm((current) => ({ ...current, claimNumber: value }))}
-            />
-            <InputField
               label="Carrier"
               value={financialForm.carrier}
               onChange={(value) => setFinancialForm((current) => ({ ...current, carrier: value }))}
@@ -429,7 +422,6 @@ function buildFinancialForm(project: Project): FinancialFormState {
     dueDate: project.dueDate ?? '',
     nextFollowUpDate: project.nextFollowUpDate ?? '',
     paymentReceivedDate: project.paymentReceivedDate ?? '',
-    claimNumber: project.claimNumber,
     carrier: project.carrier,
   }
 }
