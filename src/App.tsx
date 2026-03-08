@@ -37,14 +37,14 @@ function AuthenticatedApp({ token, user, onLogout }: { token: string; user: User
   const { projects, loading, error, refetch } = useProjects(token)
 
   return (
-    <AppShell user={user} onLogout={onLogout}>
+    <AppShell user={user} token={token} onLogout={onLogout}>
       {error && (
         <div className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-emergency">
           <strong>Error:</strong> {error}
         </div>
       )}
       <Routes>
-        <Route path="/" element={<DashboardPage projects={projects} loading={loading} token={token} />} />
+        <Route path="/" element={<DashboardPage projects={projects} loading={loading} token={token} onRefresh={refetch} />} />
         <Route path="/projects" element={<ProjectsPage projects={projects} loading={loading} token={token} onRefresh={refetch} />} />
         <Route path="/projects/:id" element={<ProjectDetailPage projects={projects} token={token} onProjectsRefresh={refetch} />} />
         <Route path="/calendar" element={<CalendarPage projects={projects} token={token} onProjectsRefresh={refetch} />} />

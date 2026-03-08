@@ -21,6 +21,7 @@ interface TodayFocusBarProps {
   unreadAlertCount: number
   outstandingBalance: number
   onCardClick?: (section: 'followups' | 'tasks' | 'emails' | 'balance') => void
+  actionSlot?: React.ReactNode
 }
 
 const toneStyles = {
@@ -44,6 +45,7 @@ export default function TodayFocusBar({
   unreadAlertCount,
   outstandingBalance,
   onCardClick,
+  actionSlot,
 }: TodayFocusBarProps) {
   const greeting = getGreeting()
   const firstName = userName.split(' ')[0] || userName
@@ -91,11 +93,14 @@ export default function TodayFocusBar({
 
   return (
     <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-slate-950">
           {greeting}, {firstName}
         </h2>
-        <p className="text-sm text-slate-500">{today}</p>
+        <div className="flex items-center gap-3">
+          {actionSlot}
+          <p className="text-sm text-slate-500">{today}</p>
+        </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3 xl:grid-cols-4">

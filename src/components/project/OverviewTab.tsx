@@ -130,6 +130,17 @@ export default function OverviewTab({ project, token }: OverviewTabProps) {
               </span>
             ) : '—'}
           </Row>
+          <Row label="Business">
+            {project.businessCategory ? (
+              <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                project.businessCategory === 'Flood Doctor' ? 'bg-sky-100 text-sky-700' :
+                project.businessCategory === 'Restoration Doctor' ? 'bg-emerald-100 text-emerald-700' :
+                'bg-purple-100 text-purple-700'
+              }`}>
+                {project.businessCategory}
+              </span>
+            ) : '—'}
+          </Row>
           <Row label="Invoice ID" value={project.invoiceId ? `#${project.invoiceId}` : '—'} />
           <Row label="Project Status">
             <StatusPill value={project.projectStatus} size="md" />

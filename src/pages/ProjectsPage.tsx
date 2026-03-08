@@ -5,6 +5,7 @@ import type { Project } from '../types/claim'
 import StatusPill from '../components/StatusPill'
 import CreateProjectModal from '../components/CreateProjectModal'
 import { computePriorityScore, getPriorityLabel } from '../lib/priority'
+import { BUSINESS_CATEGORIES } from '../shared/projects'
 
 interface ProjectsPageProps {
   projects: Project[]
@@ -19,6 +20,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
   const [filterProjectStatus, setFilterProjectStatus] = useState<string>('all')
   const [filterType, setFilterType] = useState<string>('all')
   const [filterCollections, setFilterCollections] = useState<string>('all')
+  const [filterBusiness, setFilterBusiness] = useState<string>('all')
   const [showCreate, setShowCreate] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
 
@@ -41,6 +43,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
       const matchesStatus = filterStatus === 'all' || project.invoiceStatus === filterStatus
       const matchesProjectStatus = filterProjectStatus === 'all' || project.projectStatus === filterProjectStatus
       const matchesType = filterType === 'all' || project.projectType === filterType
+      const matchesBusiness = filterBusiness === 'all' || project.businessCategory === filterBusiness
 
       const followUpDate = project.nextFollowUpDate ?? project.dueDate
       const matchesCollections = (() => {
@@ -63,7 +66,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
         return true
       })()
 
-      return matchesSearch && matchesStatus && matchesProjectStatus && matchesType && matchesCollections
+      return matchesSearch && matchesStatus && matchesProjectStatus && matchesType && matchesBusiness && matchesCollections
     })
     .sort((a, b) => {
       const aFollowUp = a.nextFollowUpDate ?? a.dueDate ?? '9999-12-31'
@@ -124,7 +127,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
       </section>
 
       <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="grid gap-4 lg:grid-cols-[1.8fr_repeat(4,minmax(0,1fr))]">
+        <div className="grid gap-4 lg:grid-cols-[1.8fr_repeat(5,minmax(0,1fr))]">
           <FilterField label="Search">
             <div className="relative">
               <svg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -177,6 +180,18 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
               <option value="Mold Remediation">Mold Remediation</option>
             </select>
           </FilterField>
+          <FilterField label="Business">
+            <select
+              value={filterBusiness}
+              onChange={(e) => setFilterBusiness(e.target.value)}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 focus:border-primary focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/15"
+            >
+              <option value="all">All businesses</option>
+              {BUSINESS_CATEGORIES.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </FilterField>
           <FilterField label="Collections">
             <select
               value={filterCollections}
@@ -205,7 +220,7 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
 
         {filtered.length === 0 ? (
           <div className="px-6 py-16 text-center text-sm text-slate-500">
-            {search || filterStatus !== 'all' || filterProjectStatus !== 'all' || filterType !== 'all' || filterCollections !== 'all'
+            {search || filterStatus !== 'all' || filterProjectStatus !== 'all' || filterType !== 'all' || filterBusiness !== 'all' || filterCollections !== 'all'
               ? 'No projects match the current filters.'
               : 'No projects found.'}
           </div>
@@ -243,6 +258,11 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                           {project.xactimateNumber ? `XA ${project.xactimateNumber}` : ''}{project.xactimateNumber && project.carrier ? ' · ' : ''}{project.carrier || 'Carrier not set'}
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {project.businessCategory && (
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${businessCategoryClasses(project.businessCategory)}`}>
+                              {project.businessCategory}
+                            </span>
+                          )}
                           <StatusPill value={project.invoiceStatus} />
                           {project.amount && (
                             <span className="text-sm font-medium tabular-nums text-slate-700">
@@ -307,6 +327,11 @@ export default function ProjectsPage({ projects, loading, token, onRefresh }: Pr
                             <p className="mt-1 text-xs text-slate-500">
                               {project.xactimateNumber ? `XA ${project.xactimateNumber}` : ''}{project.xactimateNumber && project.carrier ? ' · ' : ''}{project.carrier || 'Carrier not set'}
                             </p>
+                            {project.businessCategory && (
+                              <span className={`mt-1 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${businessCategoryClasses(project.businessCategory)}`}>
+                                {project.businessCategory}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </td>
@@ -430,6 +455,13 @@ function getInitials(value: string) {
     .slice(0, 2)
     .map((token) => token[0]?.toUpperCase() ?? '')
     .join('')
+}
+
+function businessCategoryClasses(category: string) {
+  if (category === 'Flood Doctor') return 'bg-sky-100 text-sky-700'
+  if (category === 'Restoration Doctor') return 'bg-emerald-100 text-emerald-700'
+  if (category === 'Galaxy Restoration') return 'bg-purple-100 text-purple-700'
+  return 'bg-slate-100 text-slate-700'
 }
 
 function typeClasses(projectType: string) {

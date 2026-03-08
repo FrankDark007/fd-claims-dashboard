@@ -1,10 +1,11 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ArrowTrendingDownIcon,
   CheckBadgeIcon,
   ChatBubbleLeftRightIcon,
   ClipboardDocumentListIcon,
+  PlusIcon,
 } from '@heroicons/react/24/outline'
 import type { Project } from '../types/claim'
 import { computeStats, computeAging } from '../hooks/useProjects'
@@ -17,14 +18,17 @@ import CollapsibleSection from '../components/CollapsibleSection'
 import { useGmailAlerts } from '../hooks/useGmailAlerts'
 import { useNeedsAttention } from '../hooks/useNeedsAttention'
 import { computePriorityScore, getPriorityLabel } from '../lib/priority'
+import QuickAddProject from '../components/QuickAddProject'
 
 interface DashboardPageProps {
   projects: Project[]
   loading: boolean
   token: string
+  onRefresh: () => void
 }
 
-export default function DashboardPage({ projects, loading, token }: DashboardPageProps) {
+export default function DashboardPage({ projects, loading, token, onRefresh }: DashboardPageProps) {
+  const [showQuickAdd, setShowQuickAdd] = useState(false)
   const { tasks, loading: tasksLoading, refetch: refetchTasks } = useAllTasks(token)
   const { communications, loading: communicationsLoading } = useAllCommunications(token)
   const { alerts: gmailAlerts, unreadCount, markAsRead: markGmailRead } = useGmailAlerts(token)
@@ -107,7 +111,25 @@ export default function DashboardPage({ projects, loading, token }: DashboardPag
         overdueTasksCount={overdueTasksCount}
         unreadAlertCount={unreadCount}
         outstandingBalance={outstandingBalance}
+        actionSlot={
+          <button
+            type="button"
+            onClick={() => setShowQuickAdd((prev) => !prev)}
+            className="inline-flex items-center gap-1 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-primary-hover"
+          >
+            <PlusIcon className="size-4" />
+            New project
+          </button>
+        }
       />
+
+      {showQuickAdd && (
+        <QuickAddProject
+          token={token}
+          onCreated={onRefresh}
+          onClose={() => setShowQuickAdd(false)}
+        />
+      )}
 
       {/* Tier 2: Needs Attention + AI Briefing */}
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
