@@ -70,7 +70,7 @@ ${projectSummaries}
 
 What are the 5 most important actions to take today? Return ONLY a JSON array.`
 
-    const raw = await callSonnet(context.env, SYSTEM_PROMPT, prompt, 1500)
+    const raw = await callSonnet(context.env, SYSTEM_PROMPT, prompt)
 
     let items: Array<{ priority: number; action: string; reason: string; projectId: string | null }>
     try {
