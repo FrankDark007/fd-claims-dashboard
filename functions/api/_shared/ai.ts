@@ -20,10 +20,27 @@ function extractText(message: Anthropic.Message): string {
     throw new Error(`Claude declined this request (refusal category: ${details?.category ?? 'unspecified'})`)
   }
 
-  return message.content
+  const text = message.content
     .filter((block): block is Anthropic.TextBlock => block.type === 'text')
     .map((block) => block.text)
     .join('')
+    .trim()
+
+  // Never return '' — that is the bug this file exists to prevent, just one
+  // layer down. A response can carry thinking blocks and no text (most often
+  // when max_tokens is hit during thinking), and every caller here feeds this
+  // straight into JSON.parse or renders it. Silently, '' degrades into an empty
+  // briefing cached for four hours, a blank email draft, or a summary of "".
+  // Throwing turns all three into a 500 with a reason attached.
+  if (!text) {
+    throw new Error(
+      `Claude returned no text block (stop_reason: ${message.stop_reason ?? 'unknown'}). ` +
+        'If stop_reason is max_tokens, raise the caller\'s maxTokens — on a thinking model the ' +
+        'budget covers thinking plus the answer.',
+    )
+  }
+
+  return text
 }
 
 export async function callHaiku(
