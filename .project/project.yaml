@@ -5,7 +5,7 @@ portfolio: companies/flood-doctor/internal-tools
 state: PRODUCTION
 canonical_repo: FrankDark007/fd-claims-dashboard
 canonical_branch: main
-local_checkout: /Users/ghost/flood-doctor/fd-claims-dashboard
+local_checkout: /Users/ghost/Projects/Companies/Flood-Doctor/Internal-Tools/fd-claims-dashboard
 owners: [frank]
 intent: Manage Flood Doctor claims, project files, communications, and invoice follow-up.
 definition_of_done:
