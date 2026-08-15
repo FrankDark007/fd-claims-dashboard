@@ -7,7 +7,7 @@
 2. Added transactional Gmail alert/communication writes, authoritative D1 deduplication, bounded webhook input, and conservative project matching.
 3. Removed raw share-token logging, anonymized view analytics, bounded retention, and hardened file download headers and filenames.
 4. Added contract size/signature checks, safer PDF extraction, and D1/R2 compensation when an import fails.
-5. Added Pages Functions type-checking, current dependencies, required-secret declarations, and Google ID-token signature/audience verification.
+5. Added Pages Functions type-checking, current dependencies, production-secret inventory checks, and Google ID-token signature/audience verification.
 6. Removed development redirect pages from production output so Cloudflare Pages can provide native SPA fallback routing.
 
 ### Decisions

@@ -26,11 +26,3 @@ bucket_name = "fd-project-files"
 
 [vars]
 GOOGLE_CLIENT_ID = "904013675236-trgb45v8t0o51dsen59hd984doadnj9q.apps.googleusercontent.com"
-
-[secrets]
-required = [
-  "ANTHROPIC_API_KEY",
-  "AUTH_SECRET",
-  "GMAIL_WEBHOOK_SECRET",
-  "RESEND_API_KEY",
-]

@@ -5,7 +5,7 @@
 
 - Reconciled the Git source with the contract import, share analytics, business-category, and Gmail alert features that were already partially present in the live upload.
 - Hardened authentication, upload limits, PDF validation, share-token handling, analytics privacy, Gmail deduplication, and automatic email-to-project matching.
-- Added full Pages Functions type-checking, current Wrangler tooling, current compatibility date, and required-secret declarations.
+- Added full Pages Functions type-checking, current Wrangler tooling, current compatibility date, and verified the encrypted Pages secret inventory.
 - Removed development-only HTML files from the production bundle; direct SPA routes now pass local Pages smoke tests.
 - Local migrations and end-to-end contract, share, Gmail, authentication, and routing checks pass. Next action is preview deployment, smoke testing, then production promotion.
 
