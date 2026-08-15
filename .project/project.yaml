@@ -1,0 +1,26 @@
+schema_version: 1
+project_id: fd-claims
+name: Flood Doctor claims dashboard
+portfolio: companies/flood-doctor/internal-tools
+state: PRODUCTION
+canonical_repo: FrankDark007/fd-claims-dashboard
+canonical_branch: main
+local_checkout: /Users/ghost/flood-doctor/fd-claims-dashboard
+owners: [frank]
+intent: Manage Flood Doctor claims, project files, communications, and invoice follow-up.
+definition_of_done:
+  - id: source-runtime-match
+    text: GitHub main is the identified production source.
+    verification: Pages deployment source and Git commit evidence
+  - id: workflow-health
+    text: Authentication, project, contract, share, and Gmail intake boundaries pass smoke checks.
+    verification: build, local integration, and production smoke evidence
+production_assets:
+  - provider: cloudflare-pages
+    asset: fd-claims-dashboard
+  - provider: cloudflare-d1
+    asset: fd-claims-dashboard
+  - provider: cloudflare-r2
+    asset: fd-project-files
+source_confidence: high
+state_updated_at: 2026-08-15
