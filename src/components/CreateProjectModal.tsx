@@ -105,6 +105,10 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
 
   const handleContractUpload = async () => {
     if (!contractFile) return
+    if (contractFile.size > 10 * 1024 * 1024) {
+      setError('File too large. Maximum size is 10MB.')
+      return
+    }
 
     setUploading(true)
     setError(null)
@@ -127,7 +131,6 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
       const data = await res.json() as {
         project: { id: string }
         extracted: ExtractedInfo
-        pdfTextLength: number
       }
 
       setExtracted(data.extracted)
@@ -291,7 +294,7 @@ export default function CreateProjectModal({ open, onClose, token, onCreated }: 
                         <p className="mt-2 text-sm text-gray-600">
                           <span className="font-semibold text-primary">Click to upload</span> or drag and drop
                         </p>
-                        <p className="mt-1 text-xs text-gray-500">PDF contracts only, up to 50MB</p>
+                        <p className="mt-1 text-xs text-gray-500">PDF contracts only, up to 10MB</p>
                       </div>
                     ) : (
                       <div className="rounded-lg border border-gray-200 p-4">

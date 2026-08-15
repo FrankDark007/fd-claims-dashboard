@@ -17,10 +17,14 @@ interface UserRecord {
 }
 
 function toSafeUser(user: UserRecord): Omit<UserRecord, 'passwordHash' | 'salt'> {
-  const safeUser = { ...user }
-  delete safeUser.passwordHash
-  delete safeUser.salt
-  return safeUser
+  return {
+    id: user.id,
+    username: user.username,
+    displayName: user.displayName,
+    role: user.role,
+    email: user.email,
+    createdAt: user.createdAt,
+  }
 }
 
 async function hashPassword(password: string, salt: string): Promise<string> {

@@ -1,6 +1,7 @@
 import { createProjectFile, deleteProjectFile, getProjectById, getProjectFileById, listProjectFiles } from '../../_shared/project-store'
 import { normalizeFileCategory } from '../../../../src/shared/projects'
 import { getUserField } from '../../_shared/auth'
+import { safeContentDispositionFilename } from '../../_shared/share-security'
 
 interface Env {
   FD_CLAIMS_DB: D1Database
@@ -31,7 +32,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 
     const headers = new Headers()
     headers.set('Content-Type', file.mimeType || 'application/octet-stream')
-    headers.set('Content-Disposition', `attachment; filename="${file.originalName}"`)
+    headers.set('Content-Disposition', `attachment; filename="${safeContentDispositionFilename(file.originalName)}"`)
+    headers.set('Cache-Control', 'private, no-store')
+    headers.set('X-Content-Type-Options', 'nosniff')
 
     return new Response(object.body, { headers })
   }

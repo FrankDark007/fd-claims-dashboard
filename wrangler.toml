@@ -1,5 +1,5 @@
 name = "fd-claims-dashboard"
-compatibility_date = "2024-12-01"
+compatibility_date = "2026-08-11"
 pages_build_output_dir = "dist"
 
 [[kv_namespaces]]
@@ -25,4 +25,12 @@ binding = "FD_PROJECT_FILES"
 bucket_name = "fd-project-files"
 
 [vars]
-GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_ID = "904013675236-trgb45v8t0o51dsen59hd984doadnj9q.apps.googleusercontent.com"
+
+[secrets]
+required = [
+  "ANTHROPIC_API_KEY",
+  "AUTH_SECRET",
+  "GMAIL_WEBHOOK_SECRET",
+  "RESEND_API_KEY",
+]

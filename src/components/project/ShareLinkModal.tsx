@@ -1,6 +1,13 @@
-import { useState, Fragment } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { Dialog, DialogPanel, DialogTitle, Transition, TransitionChild } from '@headlessui/react'
-import { ArrowTopRightOnSquareIcon, LinkIcon, ClipboardDocumentIcon, CheckIcon } from '@heroicons/react/24/outline'
+import { ArrowTopRightOnSquareIcon, LinkIcon, ClipboardDocumentIcon, CheckIcon, EyeIcon } from '@heroicons/react/24/outline'
+
+interface ShareLinkView {
+  id: string
+  ipAddress: string
+  userAgent: string
+  viewedAt: string
+}
 
 interface ShareLinkModalProps {
   open: boolean
@@ -16,15 +23,47 @@ const EXPIRY_OPTIONS = [
   { value: 72, label: '3 days' },
   { value: 168, label: '7 days' },
   { value: 720, label: '30 days' },
+  { value: 2160, label: '90 days' },
+  { value: 4320, label: '6 months' },
+  { value: 8760, label: '1 year' },
 ]
 
 export default function ShareLinkModal({ open, onClose, projectId, fileId, fileName, token }: ShareLinkModalProps) {
-  const [expiresInHours, setExpiresInHours] = useState(72)
+  const [expiresInHours, setExpiresInHours] = useState(720) // default 30 days
   const [shareUrl, setShareUrl] = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [views, setViews] = useState<ShareLinkView[]>([])
+  const [showViews, setShowViews] = useState(false)
+  const [loadingViews, setLoadingViews] = useState(false)
+
+  // Load view history when modal opens
+  useEffect(() => {
+    if (!open || !projectId || !fileId || !token) return
+
+    const controller = new AbortController()
+    setViews([])
+    setLoadingViews(true)
+    fetch(`/api/projects/${projectId}/share?fileId=${encodeURIComponent(fileId)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: controller.signal,
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error('Unable to load view history')
+        return res.json()
+      })
+      .then((data) => setViews((data as { views: ShareLinkView[] }).views || []))
+      .catch(() => {
+        if (!controller.signal.aborted) setViews([])
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoadingViews(false)
+      })
+
+    return () => controller.abort()
+  }, [open, projectId, fileId, token])
 
   const createShareLink = async () => {
     setCreating(true)
@@ -57,9 +96,13 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
 
   const copyToClipboard = async () => {
     if (!shareUrl) return
-    await navigator.clipboard.writeText(shareUrl)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      setError('Copy failed. Select the link and copy it manually.')
+    }
   }
 
   const handleClose = () => {
@@ -67,7 +110,29 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
     setExpiresAt(null)
     setCopied(false)
     setError(null)
+    setShowViews(false)
+    setViews([])
     onClose()
+  }
+
+  const formatViewDate = (iso: string) => {
+    return new Date(iso).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+  }
+
+  const parseUserAgent = (ua: string) => {
+    if (!ua) return 'Unknown'
+    if (ua.includes('iPhone') || ua.includes('iPad')) return 'iOS'
+    if (ua.includes('Android')) return 'Android'
+    if (ua.includes('Windows')) return 'Windows'
+    if (ua.includes('Mac')) return 'Mac'
+    if (ua.includes('Linux')) return 'Linux'
+    return 'Other'
   }
 
   return (
@@ -125,6 +190,9 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
+                      <p className="mt-1 text-xs text-gray-400">
+                        Adjusters may take months to review. 30 days or longer recommended.
+                      </p>
                     </div>
 
                     {error && (
@@ -204,6 +272,66 @@ export default function ShareLinkModal({ open, onClose, projectId, fileId, fileN
                     </div>
                   </div>
                 )}
+
+                {/* View History Section */}
+                <div className="mt-6 border-t border-gray-200 pt-4">
+                  <button
+                    onClick={() => setShowViews(!showViews)}
+                    className="flex w-full items-center justify-between text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    <span className="inline-flex items-center gap-1.5">
+                      <EyeIcon className="size-4" />
+                      View History
+                      {views.length > 0 && (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                          {views.length}
+                        </span>
+                      )}
+                    </span>
+                    <svg
+                      className={`size-4 transition-transform ${showViews ? 'rotate-180' : ''}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      strokeWidth={2}
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                    </svg>
+                  </button>
+
+                  {showViews && (
+                    <div className="mt-3">
+                      {loadingViews ? (
+                        <div className="flex items-center justify-center py-4">
+                          <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        </div>
+                      ) : views.length === 0 ? (
+                        <p className="py-3 text-center text-sm text-gray-400">No views recorded yet.</p>
+                      ) : (
+                        <div className="max-h-48 overflow-y-auto">
+                          <table className="min-w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-200">
+                                <th className="pb-2 pr-3 text-left font-medium text-gray-500">When</th>
+                                <th className="pb-2 pr-3 text-left font-medium text-gray-500">Network</th>
+                                <th className="pb-2 text-left font-medium text-gray-500">Device</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {views.map((view) => (
+                                <tr key={view.id}>
+                                  <td className="py-1.5 pr-3 text-gray-700">{formatViewDate(view.viewedAt)}</td>
+                                  <td className="py-1.5 pr-3 font-mono text-gray-600">{view.ipAddress || '—'}</td>
+                                  <td className="py-1.5 text-gray-600">{parseUserAgent(view.userAgent)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </DialogPanel>
             </TransitionChild>
           </div>

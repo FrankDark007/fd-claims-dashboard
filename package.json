@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "concurrently \"vite\" \"npm:dev:api\"",
     "dev:client": "vite",
-    "dev:api": "wrangler d1 migrations apply FD_CLAIMS_DB --local --persist-to .wrangler/state && wrangler pages dev ./public --proxy 5174 --port 3002 --d1 FD_CLAIMS_DB --kv FD_CLAIMS_USERS --kv FD_LIGHT_STATE --kv FD_AI_CACHE --r2 FD_PROJECT_FILES --persist-to .wrangler/state --log-level warn",
+    "dev:api": "wrangler d1 migrations apply FD_CLAIMS_DB --local --persist-to .wrangler/state && wrangler pages dev ./.dev-static --port 3002 --persist-to .wrangler/state --log-level warn",
     "dev:server": "npm run dev:api",
     "check:qa:local": "npx tsx scripts/check-qa-local.ts",
     "seed:qa:local": "npx tsx scripts/seed-qa-local.ts",
     "migrate:local": "wrangler d1 migrations apply FD_CLAIMS_DB --local --persist-to .wrangler/state",
     "migrate:remote": "wrangler d1 migrations apply FD_CLAIMS_DB --remote",
-    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b && npm run typecheck:functions",
+    "types:generate": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false",
+    "types:check": "wrangler types worker-configuration.d.ts --include-runtime=false --strict-vars=false --check",
+    "typecheck:functions": "npm run types:check && tsc -p tsconfig.functions.json",
+    "build": "npm run typecheck && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -27,13 +31,14 @@
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
+    "jose": "^6.2.9",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.1",
-    "resend": "^6.9.3",
-    "tsx": "^4.21.0"
+    "resend": "^6.9.3"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260815.1",
     "@eslint/js": "^9.39.1",
     "@tailwindcss/forms": "^0.5.11",
     "@tailwindcss/vite": "^4.2.1",
@@ -46,8 +51,10 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "tailwindcss": "^4.2.1",
+    "tsx": "^4.23.12",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.48.0",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "wrangler": "^4.123.0"
   }
 }

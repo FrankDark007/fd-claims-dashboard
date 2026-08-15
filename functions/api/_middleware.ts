@@ -10,6 +10,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     url.pathname === '/api/auth' ||
     url.pathname === '/api/auth/google' ||
     url.pathname === '/api/webhook' ||
+    url.pathname === '/api/gmail/inbound' ||
     url.pathname.startsWith('/api/share/')
   ) {
     return context.next()
@@ -39,24 +40,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     role: session.role,
     email: session.email || '',
   }
-
-  // Also set headers on a new request for backward compat with direct header reads
-  const headers = new Headers(context.request.headers)
-  headers.set('X-User-Id', session.userId)
-  headers.set('X-User-Name', session.username)
-  headers.set('X-User-Display', session.displayName)
-  headers.set('X-User-Role', session.role)
-  headers.set('X-User-Email', session.email || '')
-
-  const newRequest = new Request(context.request.url, {
-    method: context.request.method,
-    headers,
-    body: context.request.method === 'GET' || context.request.method === 'HEAD'
-      ? undefined
-      : context.request.body,
-  })
-
-  context.request = newRequest
 
   return context.next()
 }

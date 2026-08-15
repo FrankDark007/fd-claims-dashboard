@@ -279,6 +279,7 @@ const PROJECT_SCHEMA_STATEMENTS = [
     drive_folder_url TEXT NOT NULL DEFAULT '',
     xactimate_number TEXT NOT NULL DEFAULT '',
     claim_number TEXT NOT NULL DEFAULT '',
+    business_category TEXT NOT NULL DEFAULT '',
     carrier TEXT NOT NULL DEFAULT '',
     project_manager_name TEXT NOT NULL DEFAULT '',
     pm_email TEXT NOT NULL DEFAULT '',
@@ -409,6 +410,9 @@ async function ensureProjectSchema(db: D1Database): Promise<void> {
       }
       if (!colNames.has('client_address')) {
         await db.prepare("ALTER TABLE projects ADD COLUMN client_address TEXT NOT NULL DEFAULT ''").run()
+      }
+      if (!colNames.has('business_category')) {
+        await db.prepare("ALTER TABLE projects ADD COLUMN business_category TEXT NOT NULL DEFAULT ''").run()
       }
 
       await db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_next_follow_up_date ON projects(next_follow_up_date)').run()
@@ -656,7 +660,7 @@ function normalizeProjectRecordInput(input: ProjectWriteInput, existing?: Projec
     driveFolderUrl: input.driveFolderUrl !== undefined ? normalizeOptionalText(input.driveFolderUrl) : existing?.driveFolderUrl ?? '',
     xactimateNumber: input.xactimateNumber !== undefined ? normalizeOptionalText(input.xactimateNumber) : existing?.xactimateNumber ?? '',
     claimNumber: input.claimNumber !== undefined ? normalizeOptionalText(input.claimNumber) : existing?.claimNumber ?? '',
-    businessCategory: input.businessCategory !== undefined ? normalizeOptionalText(input.businessCategory) : existing?.businessCategory ?? '',
+    businessCategory: input.businessCategory !== undefined ? normalizeBusinessCategory(input.businessCategory) : existing?.businessCategory ?? '',
     carrier: input.carrier !== undefined ? normalizeOptionalText(input.carrier) : existing?.carrier ?? '',
     projectManagerName: input.projectManagerName !== undefined ? normalizeOptionalText(input.projectManagerName) : existing?.projectManagerName ?? '',
     pmEmail: input.pmEmail !== undefined ? normalizeOptionalText(input.pmEmail) : existing?.pmEmail ?? '',
@@ -791,6 +795,13 @@ export async function createProject(db: D1Database, input: ProjectWriteInput): P
   const projectRecord = normalizeProjectRecordInput(input)
   await insertOrReplaceProject(db, projectRecord)
   return mapProjectRecord(projectRecord)
+}
+
+export async function deleteProjectById(db: D1Database, projectId: string): Promise<boolean> {
+  return withProjectSchema(db, async () => {
+    const result = await db.prepare('DELETE FROM projects WHERE id = ?').bind(projectId).run()
+    return (result.meta.changes ?? 0) > 0
+  })
 }
 
 export async function updateProject(db: D1Database, projectId: string, input: ProjectWriteInput): Promise<Project | null> {
@@ -1480,30 +1491,26 @@ export async function deleteInvoiceEvent(db: D1Database, projectId: string, even
 
 interface ShareLinkViewRecord {
   id: string
-  shareToken: string
   projectId: string
   fileId: string
   ipAddress: string
   userAgent: string
-  referrer: string
   viewedAt: string
 }
 
 export interface ShareLinkView {
   id: string
-  shareToken: string
   projectId: string
   fileId: string
   ipAddress: string
   userAgent: string
-  referrer: string
   viewedAt: string
 }
 
 export async function logShareLinkView(
   db: D1Database,
   params: {
-    shareToken: string
+    shareTokenHash: string
     projectId: string
     fileId: string
     ipAddress: string
@@ -1514,30 +1521,34 @@ export async function logShareLinkView(
   await withProjectSchema(db, async () => {
     const id = crypto.randomUUID()
     const viewedAt = new Date().toISOString()
-    await db.prepare(`
-      INSERT INTO share_link_views (id, share_token, project_id, file_id, ip_address, user_agent, referrer, viewed_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(id, params.shareToken, params.projectId, params.fileId, params.ipAddress, params.userAgent, params.referrer, viewedAt).run()
+    await db.batch([
+      db.prepare("DELETE FROM share_link_views WHERE viewed_at < datetime('now', '-180 days')"),
+      db.prepare(`
+        INSERT INTO share_link_views (id, share_token, project_id, file_id, ip_address, user_agent, referrer, viewed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(id, params.shareTokenHash, params.projectId, params.fileId, params.ipAddress, params.userAgent, params.referrer, viewedAt),
+    ])
   })
 }
 
-export async function listShareLinkViews(db: D1Database, projectId: string): Promise<ShareLinkView[]> {
+export async function listShareLinkViews(db: D1Database, projectId: string, fileId?: string): Promise<ShareLinkView[]> {
   return withProjectSchema(db, async () => {
+    const fileFilter = fileId ? 'AND file_id = ?' : ''
+    const bindings = fileId ? [projectId, fileId] : [projectId]
     const result = await db.prepare(`
       SELECT
         id,
-        share_token AS shareToken,
         project_id AS projectId,
         file_id AS fileId,
         ip_address AS ipAddress,
         user_agent AS userAgent,
-        referrer,
         viewed_at AS viewedAt
       FROM share_link_views
       WHERE project_id = ?
+      ${fileFilter}
       ORDER BY viewed_at DESC
       LIMIT 100
-    `).bind(projectId).all<ShareLinkViewRecord>()
+    `).bind(...bindings).all<ShareLinkViewRecord>()
     return result.results ?? []
   })
 }
@@ -1584,11 +1595,10 @@ interface GmailAlertRecord {
   projectName?: string
 }
 
-export async function createGmailAlert(
+export async function createInboundGmailAlert(
   db: D1Database,
   params: {
     projectId: string
-    communicationId: string
     gmailMessageId: string
     gmailThreadId?: string | null
     fromAddress: string
@@ -1599,36 +1609,67 @@ export async function createGmailAlert(
     matchScore: number
     matchRole: string
   },
-): Promise<GmailAlert> {
+): Promise<GmailAlert | null> {
   const now = new Date().toISOString()
   const id = crypto.randomUUID()
+  const communicationId = crypto.randomUUID()
 
-  await db.prepare(`
-    INSERT INTO gmail_alerts (
-      id, project_id, communication_id, gmail_message_id, gmail_thread_id,
-      from_address, from_name, subject, summary, urgency,
-      match_score, match_role, read, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-  `).bind(
-    id,
-    params.projectId,
-    params.communicationId,
-    params.gmailMessageId,
-    params.gmailThreadId ?? null,
-    params.fromAddress,
-    params.fromName,
-    params.subject,
-    params.summary,
-    params.urgency,
-    params.matchScore,
-    params.matchRole,
-    now,
-  ).run()
+  // Insert the unique alert first, then conditionally insert its communication.
+  // D1 batches are transactional, so a failure in either statement rolls both back.
+  const results = await db.batch([
+    db.prepare(`
+      INSERT INTO gmail_alerts (
+        id, project_id, communication_id, gmail_message_id, gmail_thread_id,
+        from_address, from_name, subject, summary, urgency,
+        match_score, match_role, read, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+      ON CONFLICT(gmail_message_id) DO NOTHING
+    `).bind(
+      id,
+      params.projectId,
+      communicationId,
+      params.gmailMessageId,
+      params.gmailThreadId ?? null,
+      params.fromAddress,
+      params.fromName,
+      params.subject,
+      params.summary,
+      params.urgency,
+      params.matchScore,
+      params.matchRole,
+      now,
+    ),
+    db.prepare(`
+      INSERT INTO project_communications (
+        id, project_id, channel, direction, counterpart_name, counterpart_role,
+        counterpart_address, subject, body, status, follow_up_date, created_by,
+        created_at, updated_at
+      )
+      SELECT ?, ?, 'email', 'inbound', ?, ?, ?, ?, ?, 'received', NULL,
+        'gmail-webhook', ?, ?
+      WHERE EXISTS (SELECT 1 FROM gmail_alerts WHERE id = ?)
+    `).bind(
+      communicationId,
+      params.projectId,
+      params.fromName || params.fromAddress,
+      params.matchRole,
+      params.fromAddress,
+      params.subject,
+      params.summary,
+      now,
+      now,
+      id,
+    ),
+  ])
+
+  if ((results[0]?.meta.changes ?? 0) === 0) {
+    return null
+  }
 
   return {
     id,
     projectId: params.projectId,
-    communicationId: params.communicationId,
+    communicationId,
     gmailMessageId: params.gmailMessageId,
     gmailThreadId: params.gmailThreadId ?? null,
     fromAddress: params.fromAddress,

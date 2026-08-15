@@ -1,114 +1,89 @@
 # Session State — fd-claims-dashboard
 
-## Current Task
-Evolving claims dashboard into full project management tool at projects.flood.doctor
+## Current Checkpoint — 2026-08-15
+## Status: PREVIEW-READY
 
-## Status: Phases 1+2+3+4 Complete
+- Reconciled the Git source with the contract import, share analytics, business-category, and Gmail alert features that were already partially present in the live upload.
+- Hardened authentication, upload limits, PDF validation, share-token handling, analytics privacy, Gmail deduplication, and automatic email-to-project matching.
+- Added full Pages Functions type-checking, current Wrangler tooling, current compatibility date, and required-secret declarations.
+- Removed development-only HTML files from the production bundle; direct SPA routes now pass local Pages smoke tests.
+- Local migrations and end-to-end contract, share, Gmail, authentication, and routing checks pass. Next action is preview deployment, smoke testing, then production promotion.
 
-### What's Done
-- [x] MVP: React + Vite + TypeScript + Tailwind CSS v4 on Cloudflare Pages
-- [x] Multi-user auth with KV-backed sessions + Google Sign-In
-- [x] **Phase 1: Layout overhaul** — Headless UI AppShell (dark sidebar, mobile drawer, top bar with search + profile dropdown)
-- [x] **Phase 1: Dashboard** — Brand icon stats, invoice aging buckets (0-30/30-60/60-90/90+), recent projects with progress bars
-- [x] **Phase 1: Claims -> Projects rename** — ProjectsPage with View buttons linking to detail
-- [x] **Phase 2: Project detail page** — Tabs (Overview, Files, Timeline, Email), progress tracker, all 19 Notion properties
-- [x] **Phase 2: Backend APIs** — KV namespace FD_PROJECTS_DATA, GET/PUT /api/projects/:id/data
-- [x] **Phase 2: Notion pagination** — Fixed to fetch beyond 100 results
-- [x] Added @headlessui/react + @heroicons/react
-- [x] **Phase 3: File Management (R2)** — Upload, download, share with expiring tokens
-- [x] **Phase 4: Invoice Calendar** — Monthly grid, event tracking, Mark Sent/Paid modal
-- [x] **Deployment** — Live at projects.flood.doctor, Google OAuth (Web app client), SPA fallback
-- [x] **Create Project** — Modal on Projects page, writes to Notion DB with defaults
+## Prior Snapshot — 2026-03-07
+## Status: PAUSED
 
-### Phase 3 Details (commit 1454708)
-- R2 bucket binding added to wrangler.toml (FD_PROJECT_FILES)
-- **BLOCKER**: R2 needs to be enabled in Cloudflare Dashboard before bucket creation
-  - After enabling: `npx wrangler r2 bucket create fd-project-files`
-- Backend: POST/GET/DELETE /api/projects/:id/files (R2 + KV metadata)
-- Backend: POST /api/projects/:id/share (expiring share tokens via KV TTL)
-- Backend: GET /api/share/:token (public, no-auth file streaming)
-- Frontend: FileUploader (drag-drop, category selector, multi-file queue)
-- Frontend: FileList (grouped by category, download/share/delete)
-- Frontend: ShareLinkModal (Headless UI, configurable expiry, copy-to-clipboard)
-- Updated FilesTab, ProjectDetailPage to wire everything together
-- Middleware updated: /api/share/ is public (no auth)
+## What Was Done This Session (2026-03-07)
 
-### Cloudflare Resources
-- KV: FD_CLAIMS_USERS (b2ed4696a8184c43a3e6c5f9d6b20af9) — users, sessions
-- KV: FD_PROJECTS_DATA (18281eb24d2a4be2bdb52ac0ef39fa23) — files, emails, invoice events per project
-- R2: FD_PROJECT_FILES (fd-project-files) — **PENDING: enable R2 in dashboard**
-- DNS: projects.flood.doctor CNAME -> fd-claims-dashboard.pages.dev
-- Secrets: NOTION_API_KEY, AUTH_SECRET, ALLOWED_EMAIL
+### 1. Project Import from Google Drive (COMPLETE)
+- Searched Google Drive for all Flood Doctor client project files
+- Created 16 new project records in D1 (17 total with existing Drew Harmon)
+- Downloaded 49 files from Google Drive (PDFs, ESX/Xactimate files, JPGs, markdown)
+- Uploaded all 49 files to Cloudflare R2 bucket `fd-project-files`
+- Inserted all file metadata into D1 `project_files` table
+- Each project has `drive_folder_url` linking back to Google Drive source
 
-### Notion DB
-- Database ID: 3a496fa362994550910a04937d747166
-- Properties: Client Name, Invoice ID, Project, Project Type, Amount, Status, Contract, COC, Final Invoice, CompanyCam, Matterport, Rewrite Status, Xactimate #, Date Added, Drive Folder, Notes, Done
+### 2. Google Doc Updated (COMPLETE)
+- Updated client list at: https://docs.google.com/document/d/1hocP24-HB4INAnJXGr6obG11iVaWk0hfhfEMjIraEUE/edit
+- Contains all 17 client names and project types
 
-### Phase 4 Details (commit 69aaa34)
-- Monthly calendar grid with day cells showing invoice events
-- Month summary cards: sent/paid/reminder/disputed counts + amounts
-- Click any day to add invoice event (project selector, type, amount, notes)
-- AddInvoiceEventModal with auto-fill from project amount
-- GET /api/invoice-events — aggregates across all projects via KV list prefix scan
-- POST /api/invoice-events — adds event to project's KV store
-- useInvoiceEvents hook with optimistic add
-- Recent events list with project detail links
-- CalendarPage wired into /calendar route (replaced placeholder)
+### 3. Restoration Doctors Email Chain (BLOCKED)
+- User needs client list from email: "Requested Xactimates and the list for review"
+- From: Steve Jafari, Shyon Jafari, Katherine Henriquez (@restorationdoctors.com)
+- Email is in frankd@flooddoctorva.com (business email), NOT in personal Gmail
+- Gmail MCP only has access to darakhshan.farough@gmail.com
+- User needs to forward the email chain to personal Gmail, OR set up Pipedream MCP proxy
 
-## Next Steps (Phase 5)
-- [ ] **Phase 5: Gmail Integration** — OAuth2 for 2-3 accounts, send/receive from project Email tab
+## Projects in D1 (17 total)
+1. Drew Harmon — 3100 S Manchester St, Falls Church VA (2 files)
+2. Charles Setboun — Mold Remediation - RD (5 files)
+3. David Goldstein — Water Mitigation - RD (4 files)
+4. Mikal Fox — Water Mitigation + Packout - RD (12 files)
+5. Robert Wikowitz — Water Mitigation - Kamran (1 file)
+6. Suresh Talasila — Water Mitigation - Legal (6 files)
+7. Cigdem/John Penn — Water Mitigation - Claim I6Q7600 (3 files)
+8. Shelton Gregory — Water Mitigation - Leesburg VA (6 files)
+9. Fathi Muhssen — Water Mitigation - Dave - RD (2 files)
+10. Victor Yoo — Water Mitigation - GALAXY (1 file)
+11. Cheryl Shaver — Water Mitigation (2 files)
+12. Sammy/Amanda Merrill — DPOR Complaint (1 file)
+13. Nelson Lorianne — Water Mitigation - Multiple Claims (1 file)
+14. Thomas Shaw — Packout Only - FD - Dave (0 files)
+15. Jane Marden — Water Mitigation - Dave - Lien (1 file)
+16. Khatera Mali — Water Mitigation (1 file)
+17. Brandon Green — Water Mitigation (1 file)
 
-## Remaining TODO
-- [x] ~~Add SPA routing fallback~~ — done (public/_redirects)
-- [ ] Create GitHub repo (private) and push
-- [ ] Add inline status editing (click pill -> dropdown to update Notion)
-- [ ] **Enable R2 in Cloudflare Dashboard** then uncomment binding in wrangler.toml
+## Cloudflare Resources (Production)
+- **D1**: fd-claims-dashboard — `b1d58d87-7c59-4444-911b-90ce65be1d77`
+- **KV**: FD_CLAIMS_USERS — `b2ed4696a8184c43a3e6c5f9d6b20af9`
+- **KV**: FD_LIGHT_STATE — `18281eb24d2a4be2bdb52ac0ef39fa23`
+- **R2**: fd-project-files
+- **Pages**: fd-claims-dashboard → projects.flood.doctor
+- **Account**: BlueMedia Account (a6e32c7b5d77c4d75e82bba2d4238356)
 
-## Key Files
+## Key Facts
+- Production URL: https://projects.flood.doctor
+- Business email: frankd@flooddoctorva.com (NOT connected to Gmail MCP)
+- frank@flooddoctor.com is NOT Frank's — he does NOT own flooddoctor.com
+- Personal Gmail (connected): darakhshan.farough@gmail.com
+- D1 tables: projects, project_files, invoice_events, project_tasks, project_notes, project_communications
+
+## Previous Session Work (2026-03-06)
+- Full production deployment completed (D1, R2, KV, Pages)
+- Auth middleware fix (context.data.user pattern)
+- Title-case client names, required doc type on upload, auto-update doc status
+- Commits: 3960ee2, 549f7ec, a0d8101, 19fe277, b200842, e0e80b4
+
+## Next Steps
+1. Get client list from "Requested Xactimates" email (forward to personal Gmail or set up Pipedream)
+2. Add Restoration Doctors clients to dashboard
+3. Queued features:
+   - Contract-to-project auto-creation from PDF upload
+   - Share link improvements (longer expiry, view analytics)
+   - AI assistant integration into dashboard
+4. GOOGLE_CLIENT_ID still empty — Google OAuth won't work until set
+
+## Restart Prompt
 ```
-src/
-├── components/
-│   ├── AppShell.tsx          # Headless UI dark sidebar + top bar
-│   ├── InvoiceAgingCard.tsx  # 4-bucket aging display
-│   ├── LoginPage.tsx         # Auth page
-│   ├── ProjectListItem.tsx   # List row with progress bar
-│   ├── StatsCard.tsx         # Brand icon stats card
-│   ├── CreateProjectModal.tsx # Create new project -> Notion
-│   ├── StatusPill.tsx        # Color-coded status badges
-│   ├── calendar/
-│   │   └── AddInvoiceEventModal.tsx # Add sent/paid/reminder/disputed
-│   └── project/
-│       ├── EmailTab.tsx      # Placeholder (Phase 5)
-│       ├── FileList.tsx      # File grid by category + actions
-│       ├── FilesTab.tsx      # Orchestrates upload/list
-│       ├── FileUploader.tsx  # Drag-drop upload + category
-│       ├── OverviewTab.tsx   # All Notion properties
-│       ├── ProgressTracker.tsx # Contract->COC->Invoice->Paid
-│       ├── ShareLinkModal.tsx # Expiring share link creation
-│       └── TimelineTab.tsx   # Activity feed
-├── hooks/
-│   ├── useAuth.ts
-│   ├── useInvoiceEvents.ts   # All events + create
-│   ├── useNotionData.ts      # + computeAging()
-│   └── useProject.ts         # Per-project KV data
-├── pages/
-│   ├── CalendarPage.tsx       # Monthly invoice calendar
-│   ├── DashboardPage.tsx
-│   ├── ProjectDetailPage.tsx
-│   ├── ProjectsPage.tsx
-│   └── UsersPage.tsx
-└── types/claim.ts            # + Project, InvoiceAgingBucket, ProjectActivity
-
-functions/api/
-├── _middleware.ts            # Auth + /api/share/ public bypass
-├── auth.ts / auth/google.ts
-├── claims.ts                 # Paginated Notion queries
-├── projects/create.ts        # POST new project to Notion
-├── projects/[id]/data.ts     # KV project data CRUD
-├── projects/[id]/files.ts    # R2 file upload/download/delete
-├── projects/[id]/share.ts    # Create share tokens
-├── invoice-events.ts         # GET all / POST new invoice events
-├── share/[token].ts          # Public file streaming
-├── users.ts
-└── webhook.ts
+cd ~/flood-doctor/fd-claims-dashboard
 ```
+Context: We imported 17 client projects with 49 files from Google Drive into the fd-claims-dashboard (D1 + R2). All live on projects.flood.doctor. Next: user needs to forward "Requested Xactimates and the list for review" email from frankd@flooddoctorva.com to darakhshan.farough@gmail.com so we can extract more client names and add them to the dashboard. Also queued: contract-to-project auto-creation, share link improvements, AI assistant integration. Check .claude/session.md for full state.

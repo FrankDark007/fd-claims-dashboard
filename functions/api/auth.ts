@@ -1,3 +1,5 @@
+import { timingSafeEqualStrings } from './_shared/secure-compare'
+
 interface Env {
   AUTH_SECRET: string
   FD_CLAIMS_USERS: KVNamespace
@@ -77,9 +79,23 @@ async function upsertLocalAdmin(env: Env): Promise<AuthUserRecord> {
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
-    const { username, password } = await context.request.json() as { username: string; password: string }
+    let body: { username?: unknown; password?: unknown }
+    try {
+      body = await context.request.json()
+    } catch {
+      return Response.json({ error: 'Invalid JSON' }, { status: 400 })
+    }
 
-    if (!username || !password) {
+    const { username, password } = body
+
+    if (
+      typeof username !== 'string'
+      || typeof password !== 'string'
+      || username.length === 0
+      || username.length > 64
+      || password.length === 0
+      || password.length > 256
+    ) {
       return Response.json({ error: 'Username and password required' }, { status: 400 })
     }
 
@@ -99,7 +115,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // Verify password
     const hash = await hashPassword(password, user.salt)
-    if (hash !== user.passwordHash) {
+    if (!await timingSafeEqualStrings(hash, user.passwordHash)) {
       return Response.json({ error: 'Invalid credentials' }, { status: 401 })
     }
 
@@ -118,7 +134,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     return Response.json({ token, user: session })
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error'
-    return Response.json({ error: message }, { status: 500 })
+    console.error('Password authentication failed', {
+      error: error instanceof Error ? error.name : 'UnknownError',
+    })
+    return Response.json({ error: 'Unable to sign in' }, { status: 500 })
   }
 }
