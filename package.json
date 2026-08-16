@@ -18,6 +18,7 @@
     "typecheck:functions": "npm run types:check && tsc -p tsconfig.functions.json",
     "build": "npm run typecheck && vite build",
     "lint": "eslint .",
+    "test": "tsx --test tests/*.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {

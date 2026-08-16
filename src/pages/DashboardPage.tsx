@@ -17,7 +17,8 @@ import NeedsAttentionQueue from '../components/NeedsAttentionQueue'
 import CollapsibleSection from '../components/CollapsibleSection'
 import { useGmailAlerts } from '../hooks/useGmailAlerts'
 import { useNeedsAttention } from '../hooks/useNeedsAttention'
-import { computePriorityScore, getPriorityLabel } from '../lib/priority'
+import { getPriorityLabel } from '../lib/priority'
+import { rankClaimProjects } from '../shared/claims-hud-snapshot'
 import QuickAddProject from '../components/QuickAddProject'
 
 interface DashboardPageProps {
@@ -42,17 +43,8 @@ export default function DashboardPage({ projects, loading, token, onRefresh }: D
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 8)
 
-  const followUpQueue = unpaidProjects
-    .map((project) => {
-      const lastComm = communications.find((c) => c.projectId === project.id)
-      return {
-        project,
-        followUpDate: project.nextFollowUpDate ?? project.dueDate,
-        priority: computePriorityScore(project, lastComm?.updatedAt.slice(0, 10) ?? null, today),
-      }
-    })
+  const followUpQueue = rankClaimProjects(unpaidProjects, communications, today)
     .filter((item) => item.followUpDate !== null)
-    .sort((a, b) => b.priority - a.priority || a.followUpDate!.localeCompare(b.followUpDate!))
 
   const followUpsDueCount = followUpQueue.filter((item) => item.followUpDate! <= today).length
   const overdueTasksCount = tasks.filter((t) => !t.completed && t.dueDate && t.dueDate <= today).length

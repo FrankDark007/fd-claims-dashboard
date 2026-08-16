@@ -11,6 +11,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     url.pathname === '/api/auth/google' ||
     url.pathname === '/api/webhook' ||
     url.pathname === '/api/gmail/inbound' ||
+    url.pathname === '/api/hud/snapshot' ||
     url.pathname.startsWith('/api/share/')
   ) {
     return context.next()
